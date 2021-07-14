@@ -4,12 +4,12 @@ pragma solidity 0.6.12;
 import "./libraries/SafeMath.sol";
 import "./libraries/SafeERC20.sol";
 import "./interfaces/IPancakeRouter02.sol";
-import "./interfaces/IWexMaster.sol";
+import "./interfaces/IBoardRoomMDX.sol";
 import "./interfaces/IMasterChef.sol";
 import "./interfaces/IWETH.sol";
 import "./interfaces/IWNativeRelayer.sol";
 
-contract Strat {
+contract MdexStrat {
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
 
@@ -26,12 +26,12 @@ contract Strat {
     mapping (address=>UserAssetInfo) users;
 
     address public constant CAKE = 0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82;
-    address public constant WEX = 0xa9c41A46a6B3531d28d5c32F6633dd2fF05dFB90;
+    address public constant MDEX = 0x9C65AB58d8d978DB963e63f2bfB7121627e3a739;
     address public constant WBNB = 0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c;
-    address public constant ROUTER = 0x10ED43C718714eb63d5aA57B78B54704E256024E; 
+    address public constant ROUTER = 0x7DAe51BD3E3376B8c7c4900E9107f12Be3AF1bA8; 
 
-    IWexMaster public constant wexMaster = IWexMaster(0x22fB2663C7ca71Adc2cc99481C77Aaf21E152e2D);
-    uint256 public constant wpid = 3;
+    IBoardRoomMDX public constant mdexMaster = IBoardRoomMDX(0x6aEE12e5Eb987B3bE1BA8e621BE7C4804925bA68);
+    uint256 public constant mpid = 4;
 
     IMasterChef public constant cakeMaster = IMasterChef(0x73feaa1eE314F8c655E354234017bE2193C9E24E);
     uint256 public constant cpid = 0;
@@ -42,8 +42,8 @@ contract Strat {
     uint256 internal constant dust = 1000;
     uint256 internal constant UNIT = 1e18;
 
-    uint256 public totalStakingWexAmount;
-    uint256 public accPerShareOfWex;
+    uint256 public totalStakingMdexAmount;
+    uint256 public accPerShareOfMdex;
 
     /* ========== public view ========== */
     function sharesOf(address _user) public view returns(uint256) {
@@ -77,34 +77,34 @@ contract Strat {
         _rewardPaid = user.rewardPaid;
     }
 
-    function pendingWex() public view returns(uint256) {
-        return _pendingWex();
+    function pendingMdex() public view returns(uint256) {
+        return _pendingMdex();
     }
 
-    function pendingWexPerShare() public view returns(uint256) {
+    function pendingMdexPerShare() public view returns(uint256) {
         if (sharesTotal == 0) {
             return 0;
         }
 
-        uint256 perShare = _pendingWex().mul(1e12).div(sharesTotal);
+        uint256 perShare = _pendingMdex().mul(1e12).div(sharesTotal);
         return perShare;
     }
 
     /* ========== internal method ========== */
 
-    function _StratWex_init(address _stakingToken, address _reawardToken) internal {
+    function _StratMdex_init(address _stakingToken, address _reawardToken) internal {
         stakingToken = _stakingToken;
         reawardToken = _reawardToken;
         sharesTotal = 0;
-        totalStakingWexAmount = 0;
-        accPerShareOfWex = 0;
+        totalStakingMdexAmount = 0;
+        accPerShareOfMdex = 0;
 
         _safeApprove(stakingToken, ROUTER);
         _safeApprove(reawardToken, ROUTER);
-        _safeApprove(WEX, ROUTER);
+        _safeApprove(MDEX, ROUTER);
         _safeApprove(WBNB, ROUTER);
         _safeApprove(CAKE, ROUTER);
-        _safeApprove(WEX, address(wexMaster));
+        _safeApprove(MDEX, address(mdexMaster));
     }
 
     function _tokenPath(address _token0, address _token1) internal pure returns(address[] memory path) {
@@ -121,52 +121,54 @@ contract Strat {
         }
     }
 
-    function _stakingWex() internal view returns(uint256) {
-        return totalStakingWexAmount;
+    function _stakingMdex() internal view returns(uint256) {
+        return totalStakingMdexAmount;
     }
 
-    function _pendingWex() internal view returns(uint256) {
-        return wexMaster.pendingWex(wpid, address(this));
+    function _pendingMdex() internal view returns(uint256) {
+        return mdexMaster.pending(mpid, address(this));
     }
 
-    function _pendingWex(address _user) internal view returns(uint256) {
+    function _pendingMdex(address _user) internal view returns(uint256) {
         UserAssetInfo storage user = users[_user];
-        uint256 pending = user.pending.add(user.shares.mul(accPerShareOfWex).div(1e12).sub(user.rewardPaid));
+        uint256 perShare = pendingMdexPerShare();
+        perShare = perShare.add(accPerShareOfMdex);
+        uint256 pending = user.pending.add(user.shares.mul(perShare).div(1e12).sub(user.rewardPaid));
         return pending;
     }
 
-    function _reawardTokenToWex() internal returns(uint256) {
+    function _reawardTokenToMdex() internal returns(uint256) {
         uint256 amount = IERC20(reawardToken).balanceOf(address(this));
         if (amount > dust) {
-            return _swap(WEX, amount, _tokenPath(reawardToken, WEX));
+            return _swap(MDEX, amount, _tokenPath(reawardToken, MDEX));
         }
         return 0;
     }
 
-    function _farmWex() internal {
-        uint256 amount = IERC20(WEX).balanceOf(address(this));
+    function _farmMdex() internal {
+        uint256 amount = IERC20(MDEX).balanceOf(address(this));
         if (amount > dust) {
-            wexMaster.deposit(wpid, amount, false);
-            totalStakingWexAmount = totalStakingWexAmount.add(amount);
+            mdexMaster.deposit(mpid, amount);
+            totalStakingMdexAmount = totalStakingMdexAmount.add(amount);
 
             if (sharesTotal > 0) {
-                accPerShareOfWex = accPerShareOfWex.add(amount.mul(1e12).div(sharesTotal));
+                accPerShareOfMdex = accPerShareOfMdex.add(amount.mul(1e12).div(sharesTotal));
             }
         }
     }
 
-    function _withdrawWex(uint256 _amount) internal {
-        if (_amount == 0 || IERC20(WEX).balanceOf(address(this)) >= _amount) return;
-        uint256 _amt = _stakingWex();
+    function _withdrawMdex(uint256 _amount) internal {
+        if (_amount == 0 || IERC20(MDEX).balanceOf(address(this)) >= _amount) return;
+        uint256 _amt = _stakingMdex();
         if (_amount > _amt) {
             _amount = _amt;
         }
-        wexMaster.withdraw(wpid, _amount, true);
-        totalStakingWexAmount = totalStakingWexAmount.sub(_amount);
+        mdexMaster.withdraw(mpid, _amount);
+        totalStakingMdexAmount = totalStakingMdexAmount.sub(_amount);
     }
 
-    function _claimWex() internal {
-        wexMaster.claim(wpid);
+    function _claimMdex() internal {
+        mdexMaster.withdraw(mpid, 0);
     }
 
     function _stakingCake() internal view returns(uint256) {
@@ -178,10 +180,10 @@ contract Strat {
         return cakeMaster.pendingCake(cpid, address(this));
     }
 
-    function _reawardCakeToWex() internal returns(uint256) {
+    function _reawardCakeToMdex() internal returns(uint256) {
         uint256 amount = IERC20(CAKE).balanceOf(address(this));
         if (amount > dust) {
-            _swap(WEX, amount, _tokenPath(CAKE, WEX));
+            _swap(MDEX, amount, _tokenPath(CAKE, MDEX));
         }
     }
 

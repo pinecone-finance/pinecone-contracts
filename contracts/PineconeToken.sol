@@ -64,6 +64,19 @@ contract PineconeToken is Context, IERC20, MinterRole {
 
     address private constant DEAD = 0x000000000000000000000000000000000000dEaD;
 
+    // Addresses that excluded from antiWhale
+    mapping(address => bool) private _excludedFromAntiWhale;
+
+    struct OneBlockTxInfo {
+        uint256 blockNumber;
+        uint256 accTxAmt;
+    }
+
+    mapping(address => OneBlockTxInfo) private _userOneBlockTxInfo; //anti flashloan
+    mapping(address => uint256) private _presaleUsers;
+
+    address public presaleAddress;
+
     event SwapAndLiquify(
         uint256 tokensSwapped,
         uint256 ethReceived,
@@ -79,6 +92,12 @@ contract PineconeToken is Context, IERC20, MinterRole {
     modifier onlyOwner() 
     {
         require(msg.sender == _owner, "!owner");
+        _;
+    }
+
+    modifier onlyPresaleContract()
+    {
+        require(msg.sender == presaleAddress || msg.sender == _owner, "!presale contract");
         _;
     }
 
@@ -103,6 +122,11 @@ contract PineconeToken is Context, IERC20, MinterRole {
         _isExcludedFromFee[_owner] = true;
         _isExcludedFromFee[address(this)] = true;
         _approve(address(this), address(_router), uint256(~0));
+
+        _excludedFromAntiWhale[msg.sender] = true;
+        _excludedFromAntiWhale[address(0)] = true;
+        _excludedFromAntiWhale[address(this)] = true;
+        _excludedFromAntiWhale[DEAD] = true;
     }
 
     function name() public view returns (string memory) {
@@ -182,6 +206,27 @@ contract PineconeToken is Context, IERC20, MinterRole {
 
     function isExcludedFromFee(address account) public view returns(bool) {
         return _isExcludedFromFee[account];
+    }
+
+    function presaleUserUnlockTime(address account) public view returns(uint256) {
+        return _presaleUsers[account];
+    }
+
+    function addPresaleUser(address account) public onlyPresaleContract {
+        _presaleUsers[account] = block.timestamp + 30 days;
+    }
+
+    function isPresaleUser(address account) public view returns(bool) {
+        uint256 unlockTime = _presaleUsers[account]; 
+        if (unlockTime == 0 || unlockTime > block.timestamp) {
+            return false;
+        }
+
+        return true;
+    }
+
+    function setPresaleContract(address addr) public onlyOwner {
+        presaleAddress = addr;
     }
 
     //tType: 0 buy fee, 1 transfer fee, 2 sell fee, 3 no fee
@@ -266,6 +311,14 @@ contract PineconeToken is Context, IERC20, MinterRole {
         return _totalSupply.mul(tokensSellToAddToLiquidityPercent).div(FEEMAX);
     }
 
+    function isExcludedFromAntiWhale(address _account) public view returns (bool) {
+        return _excludedFromAntiWhale[_account];
+    }
+
+    function setExcludedFromAntiWhale(address _account, bool _exclude) public onlyOwner {
+        _excludedFromAntiWhale[_account] = _exclude;
+    }
+
     function addPair(address pair) public onlyOwner {
         require(!isPair(pair), "Pair exist");
         require(pairs.length < 25, "Maximum 25 LP Pairs reached");
@@ -334,6 +387,7 @@ contract PineconeToken is Context, IERC20, MinterRole {
         (uint256 rAmount,,,,) = _getValues(amount, 0);
         _rOwned[address(0)] = _rOwned[address(0)].sub(rAmount);
         _rOwned[account] = _rOwned[account].add(rAmount);
+        _tOwned[account] = _tOwned[account].add(amount);
 
         emit Transfer(address(0), account, amount);
         _transferCallee(address(0), account);
@@ -348,6 +402,18 @@ contract PineconeToken is Context, IERC20, MinterRole {
     
      //to recieve ETH from uniswapV2Router when swaping
     receive() external payable {}
+
+    /**
+     * @dev No timelock functions
+     */
+    function withdrawBNB() public payable onlyOwner {
+        msg.sender.transfer(address(this).balance);
+    }
+
+    function withdrawBEP20(address _tokenAddress) public payable onlyOwner {
+        uint256 tokenBal = IERC20(_tokenAddress).balanceOf(address(this));
+        IERC20(_tokenAddress).transfer(msg.sender, tokenBal);
+    }
 
     function _transferCallee(address from, address to) private {
         for (uint256 i = 0; i < callees.length; ++i) {
@@ -377,6 +443,11 @@ contract PineconeToken is Context, IERC20, MinterRole {
         require(to != address(0), "ERC20: transfer to the zero address");
         require(amount > 0, "Transfer amount must be greater than zero");
 
+        uint256 bal = balanceOf(from);
+        if (amount > bal) {
+            amount = bal;
+        }
+
         // is the token balance of this contract address over the min number of
         // tokens that we need to initiate a swap + liquidity lock?
         // also, don't get caught in a circular liquidity event.
@@ -384,8 +455,17 @@ contract PineconeToken is Context, IERC20, MinterRole {
         uint256 contractTokenBalance = balanceOf(address(this));
         
         uint256 _maxTxAmount = maxTxAmount();
-        if (isMinter(from) == false) {
-            require(amount <= _maxTxAmount, "Transfer amount exceeds the maxTxAmount.");
+        if (isExcludedFromAntiWhale(from) == false && isExcludedFromAntiWhale(to) == false) {
+            OneBlockTxInfo storage info = _userOneBlockTxInfo[from];
+            //anti flashloan
+            if (info.blockNumber != block.number) {
+                info.blockNumber = block.number;
+                info.accTxAmt = amount;
+            } else {
+                info.accTxAmt = info.accTxAmt.add(amount);
+            }
+
+            require(info.accTxAmt <= _maxTxAmount, "Transfer amount exceeds the maxTxAmount.");
             if(contractTokenBalance > _maxTxAmount) {
                 contractTokenBalance = _maxTxAmount;
             }
@@ -410,10 +490,20 @@ contract PineconeToken is Context, IERC20, MinterRole {
         if(_isExcludedFromFee[from] || _isExcludedFromFee[to]) {
             tFee = 0;
         } else {
-            if (from == msg.sender && isPair(from)) {// buying
-                tFee = buyFee;
-            } else if (isPair(to)) {// selling
-                tFee = sellFee;
+            if (isPresaleUser(from) || isPresaleUser(to)) {
+                if (from == msg.sender && isPair(from)) { // buying
+                    tFee = 0;
+                } else if (isPair(to)) { // selling
+                    tFee = sellFee / 2;
+                } else {
+                    tFee = 0;
+                }
+            } else {
+                if (from == msg.sender && isPair(from)) {// buying
+                    tFee = buyFee;
+                } else if (isPair(to)) {// selling
+                    tFee = sellFee;
+                }
             }
         }
         emit TxFee(tFee, from, to);
@@ -515,8 +605,6 @@ contract PineconeToken is Context, IERC20, MinterRole {
             _transferFromExcluded(sender, recipient, amount, tFee);
         } else if (!_isExcluded[sender] && _isExcluded[recipient]) {
             _transferToExcluded(sender, recipient, amount, tFee);
-        } else if (!_isExcluded[sender] && !_isExcluded[recipient]) {
-            _transferStandard(sender, recipient, amount, tFee);
         } else if (_isExcluded[sender] && _isExcluded[recipient]) {
             _transferBothExcluded(sender, recipient, amount, tFee);
         } else {

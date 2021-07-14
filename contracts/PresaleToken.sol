@@ -10,6 +10,7 @@ import "./interfaces/IPancakeRouter02.sol";
 import "./interfaces/IPancakeFactory.sol";
 import "./interfaces/IWETH.sol";
 import "./interfaces/IPinecone.sol";
+import "./interfaces/IPineconeToken.sol";
 
 interface IPresaleBeneficiary
 {
@@ -24,6 +25,7 @@ contract PresaleToken is Ownable, ReentrancyGuard, Pausable {
     struct AuctionInfo {
         uint256 startTime;              // start time
         uint256 deadline;               // auction deadline
+        uint256 claimTime;              // claim Time
         uint256 allocation;             // allocation per wallet
         uint256 tokenSupply;            // amount of the pre-sale token
         uint256 tokenRemain;            // remain of the pre-sale token
@@ -34,10 +36,12 @@ contract PresaleToken is Ownable, ReentrancyGuard, Pausable {
         address payable beneficiary;    // auction host
         bool archived;                  // flag to determine archived
         uint256 mintAmount;             // mint token amount
+        uint256 totalUnclaimedAmt;      // unclaimed amount
     }
 
     struct UserInfo {
         uint256 engaged;
+        uint256 unclaimedAmt;
     }
 
     AuctionInfo[] public auctions;
@@ -48,8 +52,6 @@ contract PresaleToken is Ownable, ReentrancyGuard, Pausable {
     address private constant WBNB = 0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c;
     address private constant CAKE = 0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82;
 
-    uint256 public startAid = 0;
-    uint256 public endAid = 0;
     IPineconeFarm public pineconeFarm;
 
     event Create(uint256 indexed id, address indexed inToken, address indexed outToken);
@@ -90,6 +92,7 @@ contract PresaleToken is Ownable, ReentrancyGuard, Pausable {
         AuctionInfo memory request;
         request.startTime = startTime;
         request.deadline = deadline;
+        request.claimTime = deadline;
         request.allocation = allocation;
         request.perAmount = perAmount;
         request.beneficiary = beneficiary;
@@ -113,15 +116,8 @@ contract PresaleToken is Ownable, ReentrancyGuard, Pausable {
         _safeApprove(request.inToken, request.beneficiary);
         _safeApprove(request.outToken, ROUTER);
         _safeApprove(request.outToken, request.beneficiary);
-    }
-
-    function setActiveId(uint256 sid, uint256 eid) external onlyOwner {
-        require(sid < auctions.length, "sid out of range");
-        require(eid < auctions.length, "eid out of range");
-        require(eid >= sid, "eid less than sid");
-        
-        startAid = sid;
-        endAid = sid;
+        _safeApprove(CAKE, ROUTER);
+        _safeApprove(CAKE, beneficiary);
     }
 
     function archive(uint256 id) external onlyOwner {
@@ -135,8 +131,9 @@ contract PresaleToken is Ownable, ReentrancyGuard, Pausable {
         pineconeFarm = IPineconeFarm(addr);
     }
 
-    function purchase(uint256 id) public payable whenNotPaused nonReentrant {
+    function purchase(uint256 id, uint256 shares) public payable whenNotPaused nonReentrant {
         require(id < auctions.length, "id out of range");
+        require(shares > 0, "shares <= 0");
 
         AuctionInfo storage auction = auctions[id];
         require(now >= auction.startTime, "startTime <= now");
@@ -147,7 +144,7 @@ contract PresaleToken is Ownable, ReentrancyGuard, Pausable {
         UserInfo storage user = presaledUsers[id][msg.sender];
         require(user.engaged < auction.allocation, "engaged >= allocation");
 
-        uint256 leftAmt = auction.perAmount;
+        uint256 leftAmt = auction.perAmount.mul(shares);
         if (auction.tokenRemain < leftAmt) {
             leftAmt = auction.tokenRemain;
         }
@@ -170,13 +167,14 @@ contract PresaleToken is Ownable, ReentrancyGuard, Pausable {
             );
         }
 
-        (uint256 mintAmount, uint256 lpAmount) = _mint(auction, msg.sender, leftAmt);
+        (uint256 mintAmount, uint256 lpAmount, uint256 realAmt) = _mint(auction, msg.sender, leftAmt);
         auction.mintAmount = auction.mintAmount.add(mintAmount);
-
+        auction.totalUnclaimedAmt = auction.totalUnclaimedAmt.add(realAmt);
+        user.unclaimedAmt = user.unclaimedAmt.add(realAmt);
         emit Purchase(id, msg.sender, leftAmt, mintAmount, lpAmount);
     }
 
-    function _mint(AuctionInfo memory auction, address user, uint256 inAmt) private returns(uint256 mintAmount, uint256 lpAmount) {
+    function _mint(AuctionInfo memory auction, address user, uint256 inAmt) private returns(uint256 mintAmount, uint256 lpAmount, uint256 realAmt) {
         uint256 profit = inAmt.mul(3).div(2);
         mintAmount = IPresaleBeneficiary(auction.beneficiary).mintForPresale(address(this), profit);
         uint256 token0Amt = inAmt.div(2);
@@ -194,32 +192,16 @@ contract PresaleToken is Ownable, ReentrancyGuard, Pausable {
 
         lpAmount = IERC20(auction.lpToken).balanceOf(address(this));
         IERC20(auction.lpToken).safeTransfer(owner(), lpAmount);
-        uint256 realAmt = mintAmount.sub(token1Amt);
-        IERC20(auction.outToken).safeTransfer(user, realAmt);
+        realAmt = mintAmount.sub(token1Amt);
 
         address[] memory path = new address[](2);
-        path[0] = WBNB;
+        path[0] = auction.inToken;
         path[1] = CAKE;
         uint256 bnbAmount = inAmt.sub(token0Amt);
         uint256 cakeAmount = _swap(CAKE, bnbAmount, path);
-        _safeApprove(WBNB, ROUTER);
-        _safeApprove(CAKE, ROUTER);
         IPresaleBeneficiary(auction.beneficiary).stakeForPresale(auction.beneficiary, cakeAmount);
+        IPineconeToken(auction.outToken).addPresaleUser(user);
     }
-
-    function presaleInfo() public view returns(uint256 mintAmount, uint256 deadline) {
-        mintAmount = 0;
-        deadline = 0;
-
-        if (auctions.length > 0) {
-            for (uint256 i = startAid; i <= endAid; ++i) {
-                mintAmount = mintAmount.add(auctions[i].mintAmount);
-            }
-
-            deadline = auctions[endAid].deadline;
-        }
-    }
-
 
     function auctionLength() public view returns(uint256) {
         return auctions.length;
@@ -268,5 +250,24 @@ contract PresaleToken is Ownable, ReentrancyGuard, Pausable {
     function claimDUSTBNB(address payable _to) public payable onlyOwner {
         pineconeFarm.claimBNB();
         _to.transfer(address(this).balance);
+    }
+
+    function claim(uint256 id) public nonReentrant {
+        AuctionInfo storage auction = auctions[id];
+        require(now >= auction.claimTime, "claimTime > now");
+        require(auction.totalUnclaimedAmt > 0, "totalUnclaimedAmt == 0");
+        
+        UserInfo storage user = presaledUsers[id][msg.sender];
+        require(user.unclaimedAmt > 0, "unclaimedAmt == 0");
+
+        IERC20(auction.outToken).safeTransfer(msg.sender, user.unclaimedAmt);
+        auction.totalUnclaimedAmt = auction.totalUnclaimedAmt.sub(user.unclaimedAmt);
+        user.unclaimedAmt = 0;
+    }
+
+    function setClaimTime(uint256 id, uint256 claimTime) public onlyOwner {
+        require(id < auctions.length, "id out of range");
+        AuctionInfo storage auction = auctions[id];
+        auction.claimTime = claimTime;
     }
 }

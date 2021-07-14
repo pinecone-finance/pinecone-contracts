@@ -533,6 +533,8 @@ contract PineconeFarm is OwnableUpgradeable, ReentrancyGuardUpgradeable, IPineco
         if (_PCTAmt == 0) return;
 
         uint256 PCTBal = IERC20(pctAddress).balanceOf(address(this));
+        if (PCTBal == 0) return;
+        
         if (_PCTAmt > PCTBal) {
             _PCTAmt = PCTBal;
         }
@@ -567,6 +569,10 @@ contract PineconeFarm is OwnableUpgradeable, ReentrancyGuardUpgradeable, IPineco
     }
 
     function stakeRewardsTo(address _to, uint256 _amount) public onlyMinter {
+        _stakeRewardsTo(_to, _amount);
+    }
+
+    function _stakeRewardsTo(address _to, uint256 _amount) private {
         if (_amount == 0) return;
 
         if (_to == address(0)) {
@@ -687,7 +693,7 @@ contract PineconeFarm is OwnableUpgradeable, ReentrancyGuardUpgradeable, IPineco
     }
 
     function stakeForPresale(address _to, uint256 _amount) public onlyMinter {
-        stakeRewardsTo(_to, _amount);
+        _stakeRewardsTo(_to, _amount);
     }
 
     function transferCallee(address from, address to) override public {
@@ -724,5 +730,20 @@ contract PineconeFarm is OwnableUpgradeable, ReentrancyGuardUpgradeable, IPineco
             size := extcodesize(account)
         }
         return size > 0;
+    }
+
+    function migrateCakeRewardsPool(uint256 fromId, uint toId) public onlyDev {
+        PoolInfo storage fromPool = poolInfo[fromId];
+        PoolInfo storage toPool = poolInfo[toId];
+        (uint256 wantAmt,,) = IPineconeStrategy(fromPool.strat).withdrawAll(address(this));
+        _safeApprove(address(toPool.want), toPool.strat);
+        IPineconeStrategy(toPool.strat).deposit(wantAmt, address(this));
+        cakeRewardsStakingPid = toId;
+    }
+
+    function _safeApprove(address token, address spender) internal {
+        if (token != address(0) && IERC20(token).allowance(address(this), spender) == 0) {
+            IERC20(token).safeApprove(spender, uint256(~0));
+        }
     }
 }

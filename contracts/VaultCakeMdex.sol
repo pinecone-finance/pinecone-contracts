@@ -2,10 +2,10 @@
 pragma solidity 0.6.12;
 
 import "./VaultBase.sol";
-import "./Strat.sol";
+import "./MdexStrat.sol";
 
 //Investment strategy
-contract VaultCakeWex is VaultBase, Strat{
+contract VaultCakeMdex is VaultBase, MdexStrat{
 
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
@@ -17,14 +17,14 @@ contract VaultCakeWex is VaultBase, Strat{
         address _stakingToken = CAKE; 
 
         _VaultBase_init(_config, _stratAddress);
-        _StratWex_init(_stakingToken, CAKE);
+        _StratMdex_init(_stakingToken, CAKE);
 
         _safeApprove(_stakingToken, _stratAddress);
     }
 
     /* ========== public view ========== */
     function stakeType() public pure returns(StakeType) {
-        return StakeType.Cake_Wex;
+        return StakeType.Cake_Mdex;
     }
 
     function earned0Address() public pure returns(address) {
@@ -60,28 +60,30 @@ contract VaultCakeWex is VaultBase, Strat{
     }
 
     function tvl() public view returns(uint256 priceInUsd) {
-        (uint256 wantAmt, uint256 cakeAmt, uint256 wexAmt) = balance();
+        (uint256 wantAmt, uint256 cakeAmt, uint256 mdexAmt) = balance();
         wantAmt = wantAmt.add(cakeAmt);
 
         IPineconeConfig _config = config;
         uint256 wantTvl = wantAmt.mul(_config.priceOfToken(CAKE)).div(UNIT);
-        uint256 wexTvl = wexAmt.mul(_config.priceOfToken(WEX)).div(UNIT);
-        return wantTvl.add(wexTvl);
+        uint256 mdexTvl = mdexAmt.mul(_config.priceOfToken(MDEX)).div(UNIT);
+        return wantTvl.add(mdexTvl);
     }
 
-    function balance() public view returns(uint256 wantAmt, uint256 cakeAmt, uint256 wexAmt) {
+    function balance() public view returns(uint256 wantAmt, uint256 cakeAmt, uint256 mdexAmt) {
         wantAmt = _stakingCake();
         cakeAmt = _pendingCake();
-        wexAmt = _stakingWex();
+        mdexAmt = _stakingMdex();
+        uint256 pendingMdex = _pendingMdex();
+        mdexAmt = mdexAmt.add(pendingMdex);
     }
 
-    function balanceOf(address _user) public view returns(uint256 wantAmt, uint256 cakeAmt, uint256 wexAmt) {
+    function balanceOf(address _user) public view returns(uint256 wantAmt, uint256 cakeAmt, uint256 mdexAmt) {
         if (sharesTotal == 0) {
             return (0,0,0);
         }
         
         wantAmt = 0;
-        wexAmt = _pendingWex(_user);
+        mdexAmt = _pendingMdex(_user);
         uint256 shares = sharesOf(_user);
         if (shares != 0) {
             (wantAmt, cakeAmt, ) = balance();
@@ -90,11 +92,11 @@ contract VaultCakeWex is VaultBase, Strat{
         }
     }
 
-    function earnedOf(address _user) public view returns(uint256 wantAmt, uint256 wexAmt) {
+    function earnedOf(address _user) public view returns(uint256 wantAmt, uint256 mdexAmt) {
         UserAssetInfo storage user = users[_user];
-        (uint256 wantAmt0, uint256 cakeAmt0, uint256 wexAmt0) = balanceOf(_user);
+        (uint256 wantAmt0, uint256 cakeAmt0, uint256 mdexAmt0) = balanceOf(_user);
         wantAmt = wantAmt0;
-        wexAmt = wexAmt0;
+        mdexAmt = mdexAmt0;
         if (wantAmt > user.depositAmt) {
             wantAmt = wantAmt.sub(user.depositAmt);
         } else {
@@ -105,12 +107,12 @@ contract VaultCakeWex is VaultBase, Strat{
 
     function pendingRewardsValue() public view returns(uint256 priceInUsd) {
         uint256 cakeAmt = _pendingCake();
-        uint256 wexAmt = _pendingWex();
+        uint256 mdexAmt = _pendingMdex();
 
         IPineconeConfig _config = config;
         uint256 cakeValue = cakeAmt.mul(_config.priceOfToken(CAKE)).div(UNIT);
-        uint256 wexValue = wexAmt.mul(_config.priceOfToken(WEX)).div(UNIT);
-        return cakeValue.add(wexValue);
+        uint256 mdexValue = mdexAmt.mul(_config.priceOfToken(MDEX)).div(UNIT);
+        return cakeValue.add(mdexValue);
     }    
 
     function pendingRewards(address _user) public view returns(uint256 wantAmt, uint256 pctAmt)
@@ -119,11 +121,11 @@ contract VaultCakeWex is VaultBase, Strat{
             return (0, 0);
         }
 
-        (uint256 wantAmt0, uint256 wexAmt) = earnedOf(_user);
+        (uint256 wantAmt0, uint256 mdexAmt) = earnedOf(_user);
         wantAmt = wantAmt0;
         IPineconeConfig _config = config;
-        uint256 wexToAmt = _config.getAmountsOut(wexAmt, WEX, CAKE);
-        wantAmt = wantAmt.add(wexToAmt);
+        uint256 mdexToAmt = _config.getAmountsOut(mdexAmt, MDEX, CAKE);
+        wantAmt = wantAmt.add(mdexToAmt);
         uint256 fee = performanceFee(wantAmt);
         pctAmt = _config.tokenAmountPctToMint(CAKE, fee);
         wantAmt = wantAmt.sub(fee);
@@ -151,16 +153,17 @@ contract VaultCakeWex is VaultBase, Strat{
                 .mul(sharesTotal)
                 .div(wantTotal);
         }
+        
+        _farmCake();
+        _reawardCakeToMdex();
+        _claimMdex();
+        _farmMdex();
+
         sharesTotal = sharesTotal.add(sharesAdded);
-        uint256 pending = user.shares.mul(accPerShareOfWex).div(1e12).sub(user.rewardPaid);
+        uint256 pending = user.shares.mul(accPerShareOfMdex).div(1e12).sub(user.rewardPaid);
         user.pending = user.pending.add(pending);
         user.shares = user.shares.add(sharesAdded);
-        user.rewardPaid = user.shares.mul(accPerShareOfWex).div(1e12);
-
-        _farmCake();
-        _reawardCakeToWex();
-        _claimWex();
-        _farmWex();
+        user.rewardPaid = user.shares.mul(accPerShareOfMdex).div(1e12);
         return sharesAdded;
     }
 
@@ -171,7 +174,7 @@ contract VaultCakeWex is VaultBase, Strat{
 
     function earn() public whenNotPaused onlyGov
     {
-        _earn(true);
+        _earn();
     }
 
     function withdrawAll(address _user)
@@ -186,12 +189,12 @@ contract VaultCakeWex is VaultBase, Strat{
         require(user.depositAmt > 0 || user.shares > 0, "depositAmt <= 0 && shares <= 0");
 
         uint256 wantAmt = user.depositAmt;
-        (uint256 earnedWantAmt, uint256 wexAmt) = earnedOf(_user);
+        (uint256 earnedWantAmt, uint256 mdexAmt) = earnedOf(_user);
 
         _withdrawCake(wantAmt.add(earnedWantAmt), true);
-        _withdrawWex(wexAmt);
+        _withdrawMdex(mdexAmt);
 
-        uint256 swapAmt = _swap(CAKE, wexAmt, _tokenPath(WEX, CAKE));
+        uint256 swapAmt = _swap(CAKE, mdexAmt, _tokenPath(MDEX, CAKE));
         earnedWantAmt = earnedWantAmt.add(swapAmt);
 
         //withdraw fee 
@@ -226,7 +229,7 @@ contract VaultCakeWex is VaultBase, Strat{
         user.pending = 0;
         user.rewardPaid = 0;
 
-        _earn(false);
+        _earn();
         return (wantAmt, earnedWantAmt, pctAmt);
     }
 
@@ -244,7 +247,12 @@ contract VaultCakeWex is VaultBase, Strat{
         require(user.depositAmt > 0, "depositAmt <= 0");
 
         (uint256 wantAmt, uint256 sharesRemoved) = _withdraw(_wantAmt, _user);
-        _earn(false);
+        _earn();
+        sharesTotal = sharesTotal.sub(sharesRemoved);
+        uint256 pending = user.shares.mul(accPerShareOfMdex).div(1e12).sub(user.rewardPaid);
+        user.pending = user.pending.add(pending);
+        user.shares = user.shares.sub(sharesRemoved);
+        user.rewardPaid = user.shares.mul(accPerShareOfMdex).div(1e12);
         return (wantAmt, sharesRemoved);
     }
 
@@ -259,11 +267,6 @@ contract VaultCakeWex is VaultBase, Strat{
         if (sharesRemoved > user.shares) {
             sharesRemoved = user.shares;
         }
-        sharesTotal = sharesTotal.sub(sharesRemoved);
-        uint256 pending = user.shares.mul(accPerShareOfWex).div(1e12).sub(user.rewardPaid);
-        user.pending = user.pending.add(pending);
-        user.shares = user.shares.sub(sharesRemoved);
-        user.rewardPaid = user.shares.mul(accPerShareOfWex).div(1e12);
         
         _withdrawCake(_wantAmt, false);
         uint256 wantAmt = IERC20(CAKE).balanceOf(address(this));
@@ -289,7 +292,10 @@ contract VaultCakeWex is VaultBase, Strat{
         returns(uint256, uint256)
     {
         (uint256 rewardAmt, uint256 pct) = _claim(_user);
-        _earn(false);
+        _earn();
+        UserAssetInfo storage user = users[_user];
+        user.pending = 0;
+        user.rewardPaid = user.shares.mul(accPerShareOfMdex).div(1e12);
         return (rewardAmt, pct);
     }
 
@@ -299,62 +305,48 @@ contract VaultCakeWex is VaultBase, Strat{
     {
         require(_token != config.PCT(), "!safe");
         require(_token != CAKE, "!safe");
-        require(_token != WEX, "!safe");
+        require(_token != MDEX, "!safe");
         IERC20(_token).safeTransfer(msg.sender, _amount);
     }
 
     /* ========== private method ========== */
     function _farm() private {
         _farmCake();
-        _farmWex();
+        _farmMdex();
     }
 
-    function _earn(bool claimCake) private {
-        //auto compounding cake + wex
+    function _earn() private {
+        //auto compounding cake + mdex
         if (lastEarnBlock >= block.number) return;
-        if (claimCake) {
-            _claimCake();
-        }
-        _reawardCakeToWex();
-        _claimWex();
+        _claimCake();
+        _reawardCakeToMdex();
+        _claimMdex();
         _farm();
         lastEarnBlock = block.number;
     }
 
     function _claim(address _user) private returns(uint256, uint256) {
-        (uint256 wantAmt, uint256 wexAmt) = earnedOf(_user);
-        if (wantAmt == 0 && wexAmt == 0) {
+        (uint256 wantAmt, uint256 mdexAmt) = earnedOf(_user);
+        if (wantAmt == 0 && mdexAmt == 0) {
             return(0,0);
         }
         UserAssetInfo storage user = users[_user];
-        user.pending = 0;
-        if (wantAmt > 0) {
-            if (user.shares > 0) {
-                (uint256 wantTotal,,) = balance();
-                uint256 sharesRemoved = wantAmt.mul(sharesTotal).div(wantTotal);
-                if (sharesRemoved > user.shares) {
-                    sharesRemoved = user.shares;
-                }
-                sharesTotal = sharesTotal.sub(sharesRemoved);
-                user.shares = user.shares.sub(sharesRemoved);
-                //clean dust shares
-                if (user.shares > 0 && user.shares < dust) {
-                    sharesTotal = sharesTotal.sub(user.shares);
-                    user.shares = 0;
-                    user.rewardPaid = 0;
-                } else {
-                    user.rewardPaid = user.shares.mul(accPerShareOfWex).div(1e12);
-                }
-            } else {
-                user.rewardPaid = 0;
-            }
-        } else {
-            user.rewardPaid = user.shares.mul(accPerShareOfWex).div(1e12);
+        (uint256 wantTotal,,) = balance();
+        uint256 sharesRemoved = wantAmt.mul(sharesTotal).div(wantTotal);
+        if (sharesRemoved > user.shares) {
+            sharesRemoved = user.shares;
         }
+        sharesTotal = sharesTotal.sub(sharesRemoved);
+        user.shares = user.shares.sub(sharesRemoved);
+        //clean dust shares
+        if (user.shares > 0 && user.shares < dust) {
+            sharesTotal = sharesTotal.sub(user.shares);
+            user.shares = 0;
+        } 
 
         _withdrawCake(wantAmt, true);
-        _withdrawWex(wexAmt);
-        uint256 swapAmt = _swap(CAKE, wexAmt, _tokenPath(WEX, CAKE));
+        _withdrawMdex(mdexAmt);
+        uint256 swapAmt = _swap(CAKE, mdexAmt, _tokenPath(MDEX, CAKE));
         wantAmt = wantAmt.add(swapAmt);
 
         uint256 balanceAmt = IERC20(CAKE).balanceOf(address(this));
