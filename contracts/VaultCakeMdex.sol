@@ -194,7 +194,7 @@ contract VaultCakeMdex is VaultBase, MdexStrat{
         _withdrawCake(wantAmt.add(earnedWantAmt), true);
         _withdrawMdex(mdexAmt);
 
-        uint256 swapAmt = _swap(CAKE, mdexAmt, _tokenPath(MDEX, CAKE));
+        uint256 swapAmt = _swap(CAKE, mdexAmt, _tokenPath(MDEX, CAKE), ROUTER);
         earnedWantAmt = earnedWantAmt.add(swapAmt);
 
         //withdraw fee 
@@ -346,7 +346,7 @@ contract VaultCakeMdex is VaultBase, MdexStrat{
 
         _withdrawCake(wantAmt, true);
         _withdrawMdex(mdexAmt);
-        uint256 swapAmt = _swap(CAKE, mdexAmt, _tokenPath(MDEX, CAKE));
+        uint256 swapAmt = _swap(CAKE, mdexAmt, _tokenPath(MDEX, CAKE), ROUTER);
         wantAmt = wantAmt.add(swapAmt);
 
         uint256 balanceAmt = IERC20(CAKE).balanceOf(address(this));

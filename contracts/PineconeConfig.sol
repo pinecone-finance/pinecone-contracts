@@ -16,6 +16,8 @@ contract PineconeConfig is OwnableUpgradeable {
     address public wNativeRelayer;
 
     address public constant WBNB = 0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c;
+    IRabbitCalculator public rabbitCalculator;
+    IMdexCalculator public mdexCalculator;
 
     function initialize() external initializer {
         __Ownable_init();
@@ -35,6 +37,14 @@ contract PineconeConfig is OwnableUpgradeable {
 
     function setWexCalculator(address _addr) public onlyOwner {
         wexCalculator = IWexCalculator(_addr);
+    }
+
+    function setRabbitCalculator(address _addr) public onlyOwner {
+        rabbitCalculator = IRabbitCalculator(_addr);
+    }
+
+    function setMdexCalculator(address _addr) public onlyOwner {
+        mdexCalculator = IMdexCalculator(_addr);
     }
 
     function setPineconeFarm(address _addr) public onlyOwner {

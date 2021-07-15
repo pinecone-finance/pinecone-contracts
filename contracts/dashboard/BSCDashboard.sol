@@ -37,6 +37,9 @@ contract BSCDashboard is OwnableUpgradeable {
     IERC20 private constant CAKE = IERC20(0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82);
     IERC20 private constant BUSD = IERC20(0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56);
 
+    IMdexCalculator public mdexCalculator;
+    IRabbitCalculator public rabbitCalculator;
+
     function initialize() external initializer {
         __Ownable_init();
     }
@@ -55,6 +58,14 @@ contract BSCDashboard is OwnableUpgradeable {
 
     function setWexCalculator(address addr) external onlyOwner {
         wexCalculator = IWexCalculator(addr);
+    }
+
+    function setMdexCalculator(address addr) external onlyOwner {
+        mdexCalculator = IMdexCalculator(addr);
+    }
+
+    function setRabbitCalculator(address addr) external onlyOwner {
+        rabbitCalculator = IRabbitCalculator(addr);
     }
 
     function cakePerYearOfPool(uint256 pid) public view returns(uint256) {
@@ -137,6 +148,24 @@ contract BSCDashboard is OwnableUpgradeable {
         return wex_apy;
     }
 
+    function vaultRabbitApyOfMdex(address token, uint256 pid) public view returns(uint256 totalApy, uint256 vaultApy, uint256 rabbitCompoundingApy) {
+        (uint256 vaultApr, uint256 rabbitApr) = rabbitCalculator.vaultApr(token, pid);
+        uint256 base_daily_apr = rabbitApr/ 365;
+        uint256 mdex_daily_apr = mdexCalculator.mdexPoolDailyApr();
+        uint256 mdex_apy = compundApy(mdex_daily_apr);
+        rabbitCompoundingApy = base_daily_apr.mul(mdex_apy).div(mdex_daily_apr);
+        vaultApy = vaultApr;
+        totalApy = vaultApy.add(rabbitCompoundingApy);
+    }
+
+    function vaultCakeApyOfMdex(uint256 cakePid) public view returns(uint256) {
+        uint256 base_daily_apr = cakePoolDailyApr(cakePid);
+        uint256 mdx_daily_apr = mdexCalculator.mdexPoolDailyApr();
+        uint256 mdx_apy = compundApy(mdx_daily_apr);
+        mdx_apy = base_daily_apr.mul(mdx_apy).div(mdx_daily_apr);
+        return mdx_apy;
+    }
+
     function apyOfPool(
         uint256 pid,
         uint256 cakePid
@@ -168,7 +197,6 @@ contract BSCDashboard is OwnableUpgradeable {
             earned1Apy = pct_apy.add(earnedPctApy);
         }
         else if (_type == StakeType.Cake_Wex) {
-            // earn CAKE + PCT
             uint256 _apy = vaultCakeApyOfWex(cakePid);
             uint256 cake_apy = _apy.mul(UNIT - fee).div(UNIT);
             uint256 toPctAmount = pctToTokenAmount(address(CAKE));
@@ -176,6 +204,27 @@ contract BSCDashboard is OwnableUpgradeable {
             pct_apy = pct_apy.mul(toPctAmount).div(UNIT);
             earned0Apy = cake_apy;
             earned1Apy = pct_apy.add(earnedPctApy);
+        } else if (_type == StakeType.Rabbit_Mdex) {
+            address token  = IPineconeStrategy(strat).stakingToken();
+            uint256 farmPid = IPineconeStrategy(strat).farmPid();
+            (uint256 _apy,,) = vaultRabbitApyOfMdex(token, farmPid);
+            uint256 rabbit_apy = _apy.mul(UNIT - fee).div(UNIT);
+            uint256 toPctAmount = pctToTokenAmount(want);
+            uint256 pct_apy =  _apy.mul(fee).div(UNIT);
+            pct_apy = pct_apy.mul(toPctAmount).div(UNIT);
+            earned0Apy = rabbit_apy;
+            earned1Apy = pct_apy.add(earnedPctApy);
+        } else if (_type == StakeType.Cake_Mdex) {
+            uint256 _apy = vaultCakeApyOfMdex(cakePid);
+            uint256 cake_apy = _apy.mul(UNIT - fee).div(UNIT);
+            uint256 toPctAmount = pctToTokenAmount(address(CAKE));
+            uint256 pct_apy =  _apy.mul(fee).div(UNIT);
+            pct_apy = pct_apy.mul(toPctAmount).div(UNIT);
+            earned0Apy = cake_apy;
+            earned1Apy = pct_apy.add(earnedPctApy);
+        } else if (_type == StakeType.PCTPair) {
+            earned0Apy = 0;
+            earned1Apy = earnedPctApy;
         }
     }
 

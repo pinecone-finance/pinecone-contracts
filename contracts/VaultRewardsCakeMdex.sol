@@ -14,6 +14,7 @@ contract VaultRewardsCakeMdex is VaultBase, MdexStrat{
     uint256 public constant manageFeeMax = 10000; // 100 = 1%
     uint256 public constant manageFeeUL = 3000; // max 30%
     mapping (address => bool) private _isExcludedFromFee;
+    address public constant CAKE_ROUTER = 0x10ED43C718714eb63d5aA57B78B54704E256024E;
 
     /* ========== public method ========== */
     function initialize  (
@@ -26,7 +27,12 @@ contract VaultRewardsCakeMdex is VaultBase, MdexStrat{
         _StratMdex_init(_stakingToken, CAKE);
 
         _safeApprove(_stakingToken, _stratAddress);
-        _safeApprove(config.PCT(), ROUTER);
+        _safeApprove(config.PCT(), CAKE_ROUTER);
+        _safeApprove(stakingToken, CAKE_ROUTER);
+        _safeApprove(reawardToken, CAKE_ROUTER);
+        _safeApprove(CAKE, CAKE_ROUTER);
+        _safeApprove(WBNB, CAKE_ROUTER);
+
         _isExcludedFromFee[msg.sender] = true;
         manageFee = 3000;
     }
@@ -57,8 +63,7 @@ contract VaultRewardsCakeMdex is VaultBase, MdexStrat{
         _isExcludedFromFee[account] = false;
     }
 
-    function setManageFee(uint256 _fee) onlyGov public 
-    {
+    function setManageFee(uint256 _fee) onlyGov public {
         require(_fee <= manageFeeUL, "too high");
         manageFee = _fee;
     }
@@ -194,7 +199,7 @@ contract VaultRewardsCakeMdex is VaultBase, MdexStrat{
         _withdrawCake(wantAmt, true);
         _withdrawMdex(mdexAmt);
         wantAmt = wantAmt.add(cakeAmt);
-        uint256 swapAmt = _swap(CAKE, mdexAmt, _tokenPath(MDEX, CAKE));
+        uint256 swapAmt = _swap(CAKE, mdexAmt, _tokenPath(MDEX, CAKE), ROUTER);
         wantAmt = wantAmt.add(swapAmt);
 
         uint256 earnedCakeAmt = cakeAmt.add(swapAmt);
@@ -211,7 +216,7 @@ contract VaultRewardsCakeMdex is VaultBase, MdexStrat{
             wantAmt = balanceAmt;
         }
 
-        wantAmt = _swap(WBNB, wantAmt, _tokenPath(CAKE, WBNB));
+        wantAmt = _swap(WBNB, wantAmt, _tokenPath(CAKE, WBNB), CAKE_ROUTER);
 
         if (isExcludedFromFee(_user) == false) {
             uint256 fee = _distributeManageFees(wantAmt);
@@ -246,7 +251,7 @@ contract VaultRewardsCakeMdex is VaultBase, MdexStrat{
         _withdrawCake(wantAmt, true);
         _withdrawMdex(mdexAmt);
 
-        _swap(CAKE, mdexAmt, _tokenPath(MDEX, CAKE));
+        _swap(CAKE, mdexAmt, _tokenPath(MDEX, CAKE), ROUTER);
         uint256 balanceAmt = IERC20(CAKE).balanceOf(address(this));
         IERC20(CAKE).safeTransfer(msg.sender, balanceAmt);
         sharesTotal = 0;
@@ -287,10 +292,10 @@ contract VaultRewardsCakeMdex is VaultBase, MdexStrat{
 
         uint256 bnbAmount = amount;
         address PCT = config.PCT();
-        uint256 pctAmount = _swap(PCT, amount, _tokenPath(WBNB, PCT));
+        uint256 pctAmount = _swap(PCT, amount, _tokenPath(WBNB, PCT), CAKE_ROUTER);
 
         if (bnbAmount > 0 && pctAmount > 0) {
-            IPancakeRouter02(ROUTER).addLiquidity(
+            IPancakeRouter02(CAKE_ROUTER).addLiquidity(
                 WBNB,
                 PCT,
                 bnbAmount,

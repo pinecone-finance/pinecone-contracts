@@ -16,8 +16,20 @@ interface IAlpacaCalculator {
     function balanceOf(address vault, uint256 pid, address account) external view returns(uint256);
     function balanceOfib(address vault, uint256 pid, address account) external view returns(uint256);
     function vaultApr(address vault, uint256 pid) external view returns(uint256 _apr, uint256 _alpacaApr);
+    function ibTokenCalculation(address vault, uint256 amount) external view returns(uint256);
 }
 
 interface IWexCalculator {
     function wexPoolDailyApr() external view returns(uint256);
+}
+
+interface IMdexCalculator {
+    function mdexPoolDailyApr() external view returns(uint256);
+}
+
+interface IRabbitCalculator {
+    function balanceOf(address token, uint256 pid, address account) external view returns(uint256);
+    function balanceOfib(uint256 pid, address account) external view returns(uint256);
+    function vaultApr(address token, uint256 pid) external view returns(uint256 _apr, uint256 _rabbitApr);
+    function ibToken(address token) external view returns(address);
 }

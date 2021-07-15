@@ -16,6 +16,7 @@ contract VaultRabbitMdex is VaultBase, MdexStrat{
     address public constant RABBIT = 0x95a1199EBA84ac5f19546519e287d43D2F0E1b41;
     IBank public constant RabbitBank = IBank(0xc18907269640D11E2A91D7204f33C5115Ce3419e);
     IFairLaunch public constant FairLaunch = IFairLaunch(0x81C1e8A6f8eB226aA7458744c5e12Fc338746571);
+    address public constant CAKE_ROUTER = 0x10ED43C718714eb63d5aA57B78B54704E256024E;
 
     function initialize (
         address _stakingToken,
@@ -30,11 +31,17 @@ contract VaultRabbitMdex is VaultBase, MdexStrat{
         _safeApprove(_stakingToken, address(RabbitBank));
         address ibToken = _ibToken();
         _safeApprove(ibToken, address(FairLaunch));
+
+        _safeApprove(stakingToken, CAKE_ROUTER);
+        _safeApprove(reawardToken, CAKE_ROUTER);
+        _safeApprove(CAKE, CAKE_ROUTER);
+        _safeApprove(WBNB, CAKE_ROUTER);
     }
 
     receive() external payable {}
 
     /* ========== public view ========== */
+
     function farmPid() public view returns(uint256) {
         return fairLaunchPid;
     }
@@ -209,7 +216,7 @@ contract VaultRabbitMdex is VaultBase, MdexStrat{
         _withdrawWant(wantAmt.add(earnedWantAmt));
         _withdrawMdex(mdexAmt);
 
-        uint256 swapAmt = _swap(stakingToken, mdexAmt, _tokenPath(MDEX, stakingToken));
+        uint256 swapAmt = _swap(stakingToken, mdexAmt, _tokenPath(MDEX, stakingToken), ROUTER);
         earnedWantAmt = earnedWantAmt.add(swapAmt);
 
         address wNativeRelayer = config.wNativeRelayer();
@@ -409,7 +416,7 @@ contract VaultRabbitMdex is VaultBase, MdexStrat{
         _withdrawWant(wantAmt);
         _withdrawMdex(mdexAmt);
 
-        uint256 swapAmt = _swap(stakingToken, mdexAmt, _tokenPath(MDEX, stakingToken));
+        uint256 swapAmt = _swap(stakingToken, mdexAmt, _tokenPath(MDEX, stakingToken), ROUTER);
         wantAmt = wantAmt.add(swapAmt);
 
         uint256 balanceAmt = IERC20(stakingToken).balanceOf(address(this));
@@ -436,7 +443,7 @@ contract VaultRabbitMdex is VaultBase, MdexStrat{
             uint256 profit = config.getAmountsOut(fee, stakingToken, WBNB);
             pct = pineconeFarm.mintForProfit(_user, profit, false);
 
-            uint256 cakeAmt = _swap(CAKE, fee, _tokenPath(stakingToken, CAKE));
+            uint256 cakeAmt = _swap(CAKE, fee, _tokenPath(stakingToken, CAKE), CAKE_ROUTER);
             if (cakeAmt > 0) {
                 _safeApprove(CAKE, address(pineconeFarm));
                 pineconeFarm.stakeRewardsTo(address(pineconeFarm), cakeAmt);

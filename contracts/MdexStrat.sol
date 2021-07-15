@@ -140,7 +140,7 @@ contract MdexStrat {
     function _reawardTokenToMdex() internal returns(uint256) {
         uint256 amount = IERC20(reawardToken).balanceOf(address(this));
         if (amount > dust) {
-            return _swap(MDEX, amount, _tokenPath(reawardToken, MDEX));
+            return _swap(MDEX, amount, _tokenPath(reawardToken, MDEX), ROUTER);
         }
         return 0;
     }
@@ -183,7 +183,7 @@ contract MdexStrat {
     function _reawardCakeToMdex() internal returns(uint256) {
         uint256 amount = IERC20(CAKE).balanceOf(address(this));
         if (amount > dust) {
-            _swap(MDEX, amount, _tokenPath(CAKE, MDEX));
+            _swap(MDEX, amount, _tokenPath(CAKE, MDEX), ROUTER);
         }
     }
 
@@ -231,7 +231,7 @@ contract MdexStrat {
         }
     }
 
-    function _swap(address token, uint256 amount, address[] memory path) internal returns(uint256) {
+    function _swap(address token, uint256 amount, address[] memory path, address router) internal returns(uint256) {
         if (amount == 0 || path.length == 0) return 0;
 
         uint256 amt = IERC20(path[0]).balanceOf(address(this));
@@ -240,7 +240,7 @@ contract MdexStrat {
         }
 
         uint256 beforeAmount = IERC20(token).balanceOf(address(this));
-        IPancakeRouter02(ROUTER)
+        IPancakeRouter02(router)
             .swapExactTokensForTokensSupportingFeeOnTransferTokens(
             amount,
             0,

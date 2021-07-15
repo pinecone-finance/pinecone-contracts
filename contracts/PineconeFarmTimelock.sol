@@ -512,4 +512,12 @@ contract PineconeFarmTimelock is AccessControlUpgradeable {
     {
         IPineconeFarm(_pineconefarmAddress).setPctPerBlock(_PCTPerBlock, _startBlock);
     }
+
+    function setWithdrawFeeFactor(
+        address _stratAddress,
+        uint256 _withdrawFeeFactor
+    ) public onlyRole(EXECUTOR_ROLE)
+    {
+        IPineconeStrategy(_stratAddress).setWithdrawFeeFactor(_withdrawFeeFactor);
+    }
 }

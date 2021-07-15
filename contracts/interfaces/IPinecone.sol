@@ -6,7 +6,11 @@ enum StakeType {
     None,
     Alpaca_Wex,
     Cake_Wex,
-    RewardsCake_Wex
+    RewardsCake_Wex,
+    PCTPair,
+    Rabbit_Mdex,
+    Cake_Mdex,
+    RewardsCake_Mdex
 }
 
 interface IPineconeFarm {
@@ -66,6 +70,8 @@ interface IPineconeStrategy {
             uint256 withdrawbaleAmt
         ); 
     function inCaseTokensGetStuck(address _token, uint256 _amount) external;
+    function stakingToken() external view returns(address);
+    function setWithdrawFeeFactor(uint256 _withdrawFeeFactor) external;
 }
 
 interface IOwner {

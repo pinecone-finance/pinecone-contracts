@@ -140,4 +140,15 @@ contract AlpacaCalculator is OwnableUpgradeable {
         UserInfo memory user = fairLaunch.userInfo(pid, account);
         return user.amount;
     }
+
+    function ibTokenCalculation(address vault, uint256 amount) public view returns(uint256) {
+        uint256 total = IVault(vault).totalToken();
+        total = total.sub(amount);
+        uint256 supply = IERC20(address(vault)).totalSupply();
+        if (supply == 0) {
+            return amount;
+        }
+
+        return amount.mul(supply).div(total);
+    }
 }
