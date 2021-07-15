@@ -39,7 +39,6 @@
 		"contractName": "MdexCalculator",
 		"address": "0x05055b64b77b2bA27b0c61BBC193cE8D323692D1"
 	},
-	"presaleId": "0",
 	"PineconeToken": {
 		"contractName": "PineconeToken",
 		"address": "0x8F72ae0B486c6159011b4B9515B7806fC312DBeF",
