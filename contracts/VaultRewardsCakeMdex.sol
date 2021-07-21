@@ -135,7 +135,7 @@ contract VaultRewardsCakeMdex is VaultBase, MdexStrat{
         (uint256 wantAmt, uint256 cakeAmt, uint256 mdexAmt) = balanceOfShares(_shares);
         wantAmt = wantAmt.add(cakeAmt);
 
-        uint256 mdexToAmt = config.getAmountsOut(mdexAmt, MDEX, CAKE);
+        uint256 mdexToAmt = config.getAmountsOut(mdexAmt, MDEX, CAKE, ROUTER);
         wantAmt = wantAmt.add(mdexToAmt);
 
         if (isExcludedFromFee(_user) == false) {
@@ -150,7 +150,7 @@ contract VaultRewardsCakeMdex is VaultBase, MdexStrat{
         uint256 cakeAmt = pendingCake(_shares, _user);
         if (cakeAmt == 0) return 0;
 
-        return config.getAmountsOut(cakeAmt, CAKE, WBNB);
+        return config.getAmountsOut(cakeAmt, CAKE, WBNB, CAKE_ROUTER);
     }
 
     function deposit(uint256 _shares, address _user)
@@ -166,10 +166,7 @@ contract VaultRewardsCakeMdex is VaultBase, MdexStrat{
             _shares
         );
         sharesTotal = sharesTotal.add(_shares);
-        _farmCake();
-        _reawardCakeToMdex();
-        _claimMdex();
-        _farmMdex();
+        _farm();
         return _shares;
     }
 
@@ -179,7 +176,7 @@ contract VaultRewardsCakeMdex is VaultBase, MdexStrat{
 
     function earn() public whenNotPaused onlyGov
     {
-        _earn(true);
+        _earn();
     }
 
     function claimBNB(uint256 _shares, address _user) 
@@ -196,7 +193,7 @@ contract VaultRewardsCakeMdex is VaultBase, MdexStrat{
         }
 
         (uint256 wantAmt, uint256 cakeAmt, uint256 mdexAmt) = balanceOfShares(_shares);
-        _withdrawCake(wantAmt, true);
+        _withdrawCake(wantAmt);
         _withdrawMdex(mdexAmt);
         wantAmt = wantAmt.add(cakeAmt);
         uint256 swapAmt = _swap(CAKE, mdexAmt, _tokenPath(MDEX, CAKE), ROUTER);
@@ -206,11 +203,10 @@ contract VaultRewardsCakeMdex is VaultBase, MdexStrat{
         if (earnedCakeAmt > dust) {
             IPineconeConfig _config = config;
             IPineconeFarm pineconeFarm = _config.pineconeFarm();
-            uint256 profit = _config.getAmountsOut(earnedCakeAmt, CAKE, WBNB);
+            uint256 profit = _config.getAmountsOut(earnedCakeAmt, CAKE, WBNB, CAKE_ROUTER);
             pineconeFarm.mintForProfit(address(pineconeFarm), profit, true);
         }
 
-        wantAmt = wantAmt.add(earnedCakeAmt);
         uint256 balanceAmt = IERC20(CAKE).balanceOf(address(this));
         if (wantAmt > balanceAmt) {
             wantAmt = balanceAmt;
@@ -225,7 +221,7 @@ contract VaultRewardsCakeMdex is VaultBase, MdexStrat{
         
         sharesTotal = sharesTotal.sub(_shares);
         _safeTransfer(WBNB, _user, wantAmt, config.wNativeRelayer());
-        _earn(false);
+        _earn();
         return wantAmt;
     }
 
@@ -248,7 +244,7 @@ contract VaultRewardsCakeMdex is VaultBase, MdexStrat{
          _user;
          require(sharesTotal > 0, "sharesTotal == 0!");
         (uint256 wantAmt, , uint256 mdexAmt) = balance();
-        _withdrawCake(wantAmt, true);
+        _withdrawCake(wantAmt);
         _withdrawMdex(mdexAmt);
 
         _swap(CAKE, mdexAmt, _tokenPath(MDEX, CAKE), ROUTER);
@@ -264,16 +260,12 @@ contract VaultRewardsCakeMdex is VaultBase, MdexStrat{
         _farmMdex();
     }
 
-    function _earn(bool claimCake) private {
+    function _earn() private {
         //auto compounding cake + mdex
-        if (lastEarnBlock >= block.number) return;
-        if (claimCake) {
-            _claimCake();
-        }
+        _claimCake();
         _reawardCakeToMdex();
         _claimMdex();
         _farm();
-        lastEarnBlock = block.number;
     }
 
     function _distributeManageFees(uint256 _earnedAmt) private returns (uint256) {
