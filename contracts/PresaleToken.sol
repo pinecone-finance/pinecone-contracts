@@ -21,6 +21,7 @@ interface IPresaleBeneficiary
 contract PresaleToken is Ownable, ReentrancyGuard, Pausable {
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
+    address public PCT;
 
     struct AuctionInfo {
         uint256 startTime;              // start time
@@ -125,6 +126,10 @@ contract PresaleToken is Ownable, ReentrancyGuard, Pausable {
 
         AuctionInfo storage auction = auctions[id];
         auction.archived = true;
+    }
+
+    function setPCT(address _addr) public onlyOwner {
+        PCT = _addr;
     }
 
     function setPineconeFarm(address addr) external onlyOwner {
@@ -243,6 +248,8 @@ contract PresaleToken is Ownable, ReentrancyGuard, Pausable {
     }
 
     function withdrawBEP20(address _tokenAddress, address _to) public payable onlyOwner {
+        require(_tokenAddress != PCT, "!safe");
+
         uint256 tokenBal = IERC20(_tokenAddress).balanceOf(address(this));
         IERC20(_tokenAddress).transfer(_to, tokenBal);
     }
