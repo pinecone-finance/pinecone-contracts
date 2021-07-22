@@ -82,32 +82,28 @@ contract VaultCakeMdex is VaultBase, MdexStrat{
         mdexAmt = mdexAmt.add(pendingMdex);
     }
 
-    function balanceOf(address _user) public view returns(uint256 wantAmt, uint256 cakeAmt, uint256 mdexAmt) {
+    function balanceOf(address _user) public view returns(uint256 wantAmt, uint256 mdexAmt) {
         if (sharesTotal == 0) {
-            return (0,0,0);
+            return (0,0);
         }
         
         wantAmt = 0;
         mdexAmt = _earnedMdex(_user);
         uint256 shares = sharesOf(_user);
         if (shares != 0) {
-            (wantAmt, cakeAmt, ) = balance();
+            (wantAmt,,) = balance();
             wantAmt = wantAmt.mul(shares).div(sharesTotal);
-            cakeAmt = cakeAmt.mul(shares).div(sharesTotal);
         }
     }
 
     function earnedOf(address _user) public view returns(uint256 wantAmt, uint256 mdexAmt) {
         UserAssetInfo storage user = users[_user];
-        (uint256 wantAmt0, uint256 cakeAmt0, uint256 mdexAmt0) = balanceOf(_user);
-        wantAmt = wantAmt0;
-        mdexAmt = mdexAmt0;
+        (wantAmt, mdexAmt) = balanceOf(_user);
         if (wantAmt > user.depositAmt) {
             wantAmt = wantAmt.sub(user.depositAmt);
         } else {
             wantAmt = 0;
         }
-        wantAmt = wantAmt.add(cakeAmt0);
     }
 
     function pendingRewardsValue() public view returns(uint256 priceInUsd) {
