@@ -254,11 +254,6 @@ contract PresaleToken is Ownable, ReentrancyGuard, Pausable {
         IERC20(_tokenAddress).transfer(_to, tokenBal);
     }
 
-    function claimDUSTBNB(address payable _to) public payable onlyOwner {
-        pineconeFarm.claimBNB();
-        _to.transfer(address(this).balance);
-    }
-
     function claim(uint256 id) public nonReentrant {
         AuctionInfo storage auction = auctions[id];
         require(now >= auction.claimTime, "claimTime > now");

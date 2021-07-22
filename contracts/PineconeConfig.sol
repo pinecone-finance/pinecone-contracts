@@ -5,6 +5,7 @@ import "./helpers/Ownable.sol";
 import "./interfaces/IPinecone.sol";
 import "./interfaces/IDashboard.sol";
 import "./WNativeRelayer.sol";
+import "./interfaces/IPancakeRouter02.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 
 contract PineconeConfig is OwnableUpgradeable {
@@ -72,14 +73,19 @@ contract PineconeConfig is OwnableUpgradeable {
         }
     }
 
-    function getAmountsOut(uint256 amount, address token0, address token1) public view returns (uint256) {
+    function getAmountsOut(uint256 amount, address token0, address token1, address router) public view returns (uint256) {
         if (amount == 0) {
             return 0;
         }
         if (token0 == token1) {
             return amount;
         }
-        return priceCalculator.getAmountsOut(amount, _tokenPath(token0, token1));
+
+        uint256[] memory amounts = IPancakeRouter02(router).getAmountsOut(amount, _tokenPath(token0, token1));
+        if (amounts.length == 0) {
+            return 0;
+        }
+        return amounts[amounts.length - 1];
     }
 
     function _tokenPath(address _token0, address _token1) private pure returns(address[] memory path) {

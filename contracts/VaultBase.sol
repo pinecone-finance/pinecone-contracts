@@ -23,8 +23,6 @@ contract VaultBase is OwnableUpgradeable, ReentrancyGuardUpgradeable, PausableUp
     uint256 public constant commissionUL = 3000; // max 30%
     uint256 public constant feeMax = 10000;
 
-    uint256 public lastEarnBlock;
-
     IPineconeConfig public config;
     address public stratAddress;
 
@@ -36,7 +34,6 @@ contract VaultBase is OwnableUpgradeable, ReentrancyGuardUpgradeable, PausableUp
         withdrawFeeFactor = 50;
         minDepositTimeWithNoFee = 3 days;
         commission = 3000;
-        lastEarnBlock = 0;
         devAddress = msg.sender;
         govAddress = msg.sender;
         config = IPineconeConfig(_config);

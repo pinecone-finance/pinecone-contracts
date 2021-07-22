@@ -4,12 +4,11 @@ pragma solidity 0.6.12;
 import "./libraries/SafeMath.sol";
 import "./libraries/SafeERC20.sol";
 import "./interfaces/IPancakeRouter02.sol";
-import "./interfaces/IBoardRoomMDX.sol";
 import "./interfaces/IMasterChef.sol";
 import "./interfaces/IWETH.sol";
 import "./interfaces/IWNativeRelayer.sol";
 
-contract MdexStrat {
+contract CakeStrat {
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
 
@@ -26,12 +25,8 @@ contract MdexStrat {
     mapping (address=>UserAssetInfo) users;
 
     address public constant CAKE = 0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82;
-    address public constant MDEX = 0x9C65AB58d8d978DB963e63f2bfB7121627e3a739;
     address public constant WBNB = 0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c;
-    address public constant ROUTER = 0x7DAe51BD3E3376B8c7c4900E9107f12Be3AF1bA8; 
-
-    IBoardRoomMDX public constant mdexMaster = IBoardRoomMDX(0x6aEE12e5Eb987B3bE1BA8e621BE7C4804925bA68);
-    uint256 public constant mpid = 4;
+    address public constant ROUTER = 0x10ED43C718714eb63d5aA57B78B54704E256024E;
 
     IMasterChef public constant cakeMaster = IMasterChef(0x73feaa1eE314F8c655E354234017bE2193C9E24E);
     uint256 public constant cpid = 0;
@@ -42,8 +37,7 @@ contract MdexStrat {
     uint256 internal constant dust = 1000;
     uint256 internal constant UNIT = 1e18;
 
-    uint256 public totalStakingMdexAmount;
-    uint256 public accPerShareOfMdex;
+    uint256 public accPerShareOfCake;
 
     /* ========== public view ========== */
     function sharesOf(address _user) public view returns(uint256) {
@@ -77,38 +71,32 @@ contract MdexStrat {
         _rewardPaid = user.rewardPaid;
     }
 
-    function pendingMdex() public view returns(uint256) {
-        return _pendingMdex();
-    }
-
-    function pendingMdexPerShare() public view returns(uint256) {
+    function pendingCakePerShare() public view returns(uint256) {
         if (sharesTotal == 0) {
             return 0;
         }
 
-        uint256 perShare = _pendingMdex().mul(1e12).div(sharesTotal);
+        uint256 perShare = _pendingCake().mul(1e12).div(sharesTotal);
         return perShare;
     }
 
-    function earnedMdex(address _user) public view returns(uint256) {
-        return _earnedMdex(_user);
+    function earnedCake(address _user) public view returns(uint256) {
+        return _earnedCake(_user);
     }
 
     /* ========== internal method ========== */
 
-    function _StratMdex_init(address _stakingToken, address _reawardToken) internal {
+    function _StratCake_init(address _stakingToken, address _reawardToken) internal {
         stakingToken = _stakingToken;
         reawardToken = _reawardToken;
         sharesTotal = 0;
-        totalStakingMdexAmount = 0;
-        accPerShareOfMdex = 0;
+        accPerShareOfCake = 0;
 
         _safeApprove(stakingToken, ROUTER);
         _safeApprove(reawardToken, ROUTER);
-        _safeApprove(MDEX, ROUTER);
         _safeApprove(WBNB, ROUTER);
         _safeApprove(CAKE, ROUTER);
-        _safeApprove(MDEX, address(mdexMaster));
+        _safeApprove(CAKE, address(cakeMaster));
     }
 
     function _tokenPath(address _token0, address _token1) internal pure returns(address[] memory path) {
@@ -125,54 +113,20 @@ contract MdexStrat {
         }
     }
 
-    function _stakingMdex() internal view returns(uint256) {
-        return totalStakingMdexAmount;
-    }
-
-    function _pendingMdex() internal view returns(uint256) {
-        return mdexMaster.pending(mpid, address(this));
-    }
-
-    function _earnedMdex(address _user) internal view returns(uint256) {
+    function _earnedCake(address _user) internal view returns(uint256) {
         UserAssetInfo storage user = users[_user];
-        uint256 perShare = pendingMdexPerShare();
-        perShare = perShare.add(accPerShareOfMdex);
+        uint256 perShare = pendingCakePerShare();
+        perShare = perShare.add(accPerShareOfCake);
         uint256 pending = user.pending.add(user.shares.mul(perShare).div(1e12).sub(user.rewardPaid));
         return pending;
     }
 
-    function _reawardTokenToMdex() internal returns(uint256) {
+    function _reawardTokenToCake() internal returns(uint256) {
         uint256 amount = IERC20(reawardToken).balanceOf(address(this));
         if (amount > dust) {
-            return _swap(MDEX, amount, _tokenPath(reawardToken, MDEX), ROUTER);
+            return _swap(CAKE, amount, _tokenPath(reawardToken, CAKE), ROUTER);
         }
         return 0;
-    }
-
-    function _farmMdex() internal {
-        uint256 amount = IERC20(MDEX).balanceOf(address(this));
-        if (amount > dust) {
-            mdexMaster.deposit(mpid, amount);
-            totalStakingMdexAmount = totalStakingMdexAmount.add(amount);
-
-            if (sharesTotal > 0) {
-                accPerShareOfMdex = accPerShareOfMdex.add(amount.mul(1e12).div(sharesTotal));
-            }
-        }
-    }
-
-    function _withdrawMdex(uint256 _amount) internal {
-        if (_amount == 0 || IERC20(MDEX).balanceOf(address(this)) >= _amount) return;
-        uint256 _amt = _stakingMdex();
-        if (_amount > _amt) {
-            _amount = _amt;
-        }
-        mdexMaster.withdraw(mpid, _amount);
-        totalStakingMdexAmount = totalStakingMdexAmount.sub(_amount);
-    }
-
-    function _claimMdex() internal {
-        mdexMaster.withdraw(mpid, 0);
     }
 
     function _stakingCake() internal view returns(uint256) {
@@ -184,17 +138,14 @@ contract MdexStrat {
         return cakeMaster.pendingCake(cpid, address(this));
     }
 
-    function _reawardCakeToMdex() internal returns(uint256) {
-        uint256 amount = IERC20(CAKE).balanceOf(address(this));
-        if (amount > dust) {
-            _swap(MDEX, amount, _tokenPath(CAKE, MDEX), ROUTER);
-        }
-    }
-
     function _farmCake() internal {
-        uint256 wantAmt = IERC20(CAKE).balanceOf(address(this));
-        if (wantAmt > 0) {
-            cakeMaster.enterStaking(wantAmt);
+        uint256 amount = IERC20(CAKE).balanceOf(address(this));
+        if (amount > 0) {
+            cakeMaster.enterStaking(amount);
+
+            if (sharesTotal > 0) {
+                accPerShareOfCake = accPerShareOfCake.add(amount.mul(1e12).div(sharesTotal));
+            }
         }
     }
 
@@ -210,7 +161,7 @@ contract MdexStrat {
         uint256 cakeBalance = IERC20(CAKE).balanceOf(address(this));
         if (cakeBalance < amount) {
             cakeMaster.leaveStaking(amount.sub(cakeBalance));
-        } 
+        }
     }
 
     function _safeApprove(address token, address spender) internal {

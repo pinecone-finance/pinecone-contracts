@@ -2,10 +2,10 @@
 pragma solidity 0.6.12;
 
 import "./VaultBase.sol";
-import "./MdexStrat.sol";
+import "./BSWStrat.sol";
 
 //Investment strategy
-contract VaultCakeMdex is VaultBase, MdexStrat{
+contract VaultCakeBSW is VaultBase, BSWStrat{
 
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
@@ -18,7 +18,7 @@ contract VaultCakeMdex is VaultBase, MdexStrat{
         address _stakingToken = CAKE; 
 
         _VaultBase_init(_config, _stratAddress);
-        _StratMdex_init(_stakingToken, CAKE);
+        _StratBSW_init(_stakingToken, CAKE);
 
         IPineconeFarm pineconeFarm = config.pineconeFarm();
         _safeApprove(CAKE, address(pineconeFarm));
@@ -29,7 +29,7 @@ contract VaultCakeMdex is VaultBase, MdexStrat{
 
     /* ========== public view ========== */
     function stakeType() public pure returns(StakeType) {
-        return StakeType.Cake_Mdex;
+        return StakeType.Cake_BSW;
     }
 
     function earned0Address() public pure returns(address) {
@@ -65,30 +65,30 @@ contract VaultCakeMdex is VaultBase, MdexStrat{
     }
 
     function tvl() public view returns(uint256 priceInUsd) {
-        (uint256 wantAmt, uint256 cakeAmt, uint256 mdexAmt) = balance();
+        (uint256 wantAmt, uint256 cakeAmt, uint256 bswAmt) = balance();
         wantAmt = wantAmt.add(cakeAmt);
 
         IPineconeConfig _config = config;
         uint256 wantTvl = wantAmt.mul(_config.priceOfToken(CAKE)).div(UNIT);
-        uint256 mdexTvl = mdexAmt.mul(_config.priceOfToken(MDEX)).div(UNIT);
-        return wantTvl.add(mdexTvl);
+        uint256 bswTvl = bswAmt.mul(_config.priceOfToken(BSW)).div(UNIT);
+        return wantTvl.add(bswTvl);
     }
 
-    function balance() public view returns(uint256 wantAmt, uint256 cakeAmt, uint256 mdexAmt) {
+    function balance() public view returns(uint256 wantAmt, uint256 cakeAmt, uint256 bswAmt) {
         wantAmt = _stakingCake();
         cakeAmt = _pendingCake();
-        mdexAmt = _stakingMdex();
-        uint256 pendingMdex = _pendingMdex();
-        mdexAmt = mdexAmt.add(pendingMdex);
+        bswAmt = _stakingBSW();
+        uint256 pendingBSW = _pendingBSW();
+        bswAmt = bswAmt.add(pendingBSW);
     }
 
-    function balanceOf(address _user) public view returns(uint256 wantAmt, uint256 cakeAmt, uint256 mdexAmt) {
+    function balanceOf(address _user) public view returns(uint256 wantAmt, uint256 cakeAmt, uint256 bswAmt) {
         if (sharesTotal == 0) {
             return (0,0,0);
         }
         
         wantAmt = 0;
-        mdexAmt = _earnedMdex(_user);
+        bswAmt = _earnedBSW(_user);
         uint256 shares = sharesOf(_user);
         if (shares != 0) {
             (wantAmt, cakeAmt, ) = balance();
@@ -97,11 +97,11 @@ contract VaultCakeMdex is VaultBase, MdexStrat{
         }
     }
 
-    function earnedOf(address _user) public view returns(uint256 wantAmt, uint256 mdexAmt) {
+    function earnedOf(address _user) public view returns(uint256 wantAmt, uint256 bswAmt) {
         UserAssetInfo storage user = users[_user];
-        (uint256 wantAmt0, uint256 cakeAmt0, uint256 mdexAmt0) = balanceOf(_user);
+        (uint256 wantAmt0, uint256 cakeAmt0, uint256 bswAmt0) = balanceOf(_user);
         wantAmt = wantAmt0;
-        mdexAmt = mdexAmt0;
+        bswAmt = bswAmt0;
         if (wantAmt > user.depositAmt) {
             wantAmt = wantAmt.sub(user.depositAmt);
         } else {
@@ -112,12 +112,12 @@ contract VaultCakeMdex is VaultBase, MdexStrat{
 
     function pendingRewardsValue() public view returns(uint256 priceInUsd) {
         uint256 cakeAmt = _pendingCake();
-        uint256 mdexAmt = _pendingMdex();
+        uint256 bswAmt = _pendingBSW();
 
         IPineconeConfig _config = config;
         uint256 cakeValue = cakeAmt.mul(_config.priceOfToken(CAKE)).div(UNIT);
-        uint256 mdexValue = mdexAmt.mul(_config.priceOfToken(MDEX)).div(UNIT);
-        return cakeValue.add(mdexValue);
+        uint256 bswValue = bswAmt.mul(_config.priceOfToken(BSW)).div(UNIT);
+        return cakeValue.add(bswValue);
     }    
 
     function pendingRewards(address _user) public view returns(uint256 wantAmt, uint256 pctAmt)
@@ -126,11 +126,11 @@ contract VaultCakeMdex is VaultBase, MdexStrat{
             return (0, 0);
         }
 
-        (uint256 wantAmt0, uint256 mdexAmt) = earnedOf(_user);
+        (uint256 wantAmt0, uint256 bswAmt) = earnedOf(_user);
         wantAmt = wantAmt0;
         IPineconeConfig _config = config;
-        uint256 mdexToAmt = _config.getAmountsOut(mdexAmt, MDEX, CAKE, ROUTER);
-        wantAmt = wantAmt.add(mdexToAmt);
+        uint256 bswToAmt = _config.getAmountsOut(bswAmt, BSW, CAKE, ROUTER);
+        wantAmt = wantAmt.add(bswToAmt);
         uint256 fee = performanceFee(wantAmt);
         pctAmt = _config.tokenAmountPctToMint(CAKE, fee);
         wantAmt = wantAmt.sub(fee);
@@ -160,15 +160,15 @@ contract VaultCakeMdex is VaultBase, MdexStrat{
         }
         
         _farmCake();
-        _reawardCakeToMdex();
-        _claimMdex();
-        _farmMdex();
+        _reawardCakeToBSW();
+        _claimBSW();
+        _farmBSW();
 
         sharesTotal = sharesTotal.add(sharesAdded);
-        uint256 pending = user.shares.mul(accPerShareOfMdex).div(1e12).sub(user.rewardPaid);
+        uint256 pending = user.shares.mul(accPerShareOfBSW).div(1e12).sub(user.rewardPaid);
         user.pending = user.pending.add(pending);
         user.shares = user.shares.add(sharesAdded);
-        user.rewardPaid = user.shares.mul(accPerShareOfMdex).div(1e12);
+        user.rewardPaid = user.shares.mul(accPerShareOfBSW).div(1e12);
         return sharesAdded;
     }
 
@@ -194,12 +194,12 @@ contract VaultCakeMdex is VaultBase, MdexStrat{
         require(user.depositAmt > 0 || user.shares > 0, "depositAmt <= 0 && shares <= 0");
 
         uint256 wantAmt = user.depositAmt;
-        (uint256 earnedWantAmt, uint256 mdexAmt) = earnedOf(_user);
+        (uint256 earnedWantAmt, uint256 bswAmt) = earnedOf(_user);
 
         _withdrawCake(wantAmt.add(earnedWantAmt));
-        _withdrawMdex(mdexAmt);
+        _withdrawBSW(bswAmt);
 
-        uint256 swapAmt = _swap(CAKE, mdexAmt, _tokenPath(MDEX, CAKE), ROUTER);
+        uint256 swapAmt = _swap(CAKE, bswAmt, _tokenPath(BSW, CAKE), ROUTER);
         earnedWantAmt = earnedWantAmt.add(swapAmt);
 
         //withdraw fee 
@@ -254,10 +254,10 @@ contract VaultCakeMdex is VaultBase, MdexStrat{
         (uint256 wantAmt, uint256 sharesRemoved) = _withdraw(_wantAmt, _user);
         _earn();
         sharesTotal = sharesTotal.sub(sharesRemoved);
-        uint256 pending = user.shares.mul(accPerShareOfMdex).div(1e12).sub(user.rewardPaid);
+        uint256 pending = user.shares.mul(accPerShareOfBSW).div(1e12).sub(user.rewardPaid);
         user.pending = user.pending.add(pending);
         user.shares = user.shares.sub(sharesRemoved);
-        user.rewardPaid = user.shares.mul(accPerShareOfMdex).div(1e12);
+        user.rewardPaid = user.shares.mul(accPerShareOfBSW).div(1e12);
         return (wantAmt, sharesRemoved);
     }
 
@@ -300,7 +300,7 @@ contract VaultCakeMdex is VaultBase, MdexStrat{
         _earn();
         UserAssetInfo storage user = users[_user];
         user.pending = 0;
-        user.rewardPaid = user.shares.mul(accPerShareOfMdex).div(1e12);
+        user.rewardPaid = user.shares.mul(accPerShareOfBSW).div(1e12);
         return (rewardAmt, pct);
     }
 
@@ -310,27 +310,27 @@ contract VaultCakeMdex is VaultBase, MdexStrat{
     {
         require(_token != config.PCT(), "!safe");
         require(_token != CAKE, "!safe");
-        require(_token != MDEX, "!safe");
+        require(_token != BSW, "!safe");
         IERC20(_token).safeTransfer(msg.sender, _amount);
     }
 
     /* ========== private method ========== */
     function _farm() private {
         _farmCake();
-        _farmMdex();
+        _farmBSW();
     }
 
     function _earn() private {
-        //auto compounding cake + mdex
+        //auto compounding cake
         _claimCake();
-        _reawardCakeToMdex();
-        _claimMdex();
+        _reawardCakeToBSW();
+        _claimBSW();
         _farm();
     }
 
     function _claim(address _user) private returns(uint256, uint256) {
-        (uint256 wantAmt, uint256 mdexAmt) = earnedOf(_user);
-        if (wantAmt == 0 && mdexAmt == 0) {
+        (uint256 wantAmt, uint256 bswAmt) = earnedOf(_user);
+        if (wantAmt == 0 && bswAmt == 0) {
             return(0,0);
         }
         UserAssetInfo storage user = users[_user];
@@ -348,8 +348,8 @@ contract VaultCakeMdex is VaultBase, MdexStrat{
         } 
 
         _withdrawCake(wantAmt);
-        _withdrawMdex(mdexAmt);
-        uint256 swapAmt = _swap(CAKE, mdexAmt, _tokenPath(MDEX, CAKE), ROUTER);
+        _withdrawBSW(bswAmt);
+        uint256 swapAmt = _swap(CAKE, bswAmt, _tokenPath(BSW, CAKE), ROUTER);
         wantAmt = wantAmt.add(swapAmt);
 
         uint256 balanceAmt = IERC20(CAKE).balanceOf(address(this));

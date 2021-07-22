@@ -63,11 +63,9 @@ contract PineconeFarm is OwnableUpgradeable, ReentrancyGuardUpgradeable, IPineco
 
     mapping(address => bool) minters;
     uint256 public pctPerProfitBNB;
-    uint256 public constant devPCTReward = 125; //10%
-    uint256 public constant pePCTReward = 125; //10%
-
-    address public devRewardsAddress;
-    address public peRewardsAddress;
+    uint256 public constant teamPCTReward = 250; //20%
+    address public devAddress;
+    address public teamRewardsAddress;
 
     uint256 public cakeRewardsStakingPid;
 
@@ -78,6 +76,8 @@ contract PineconeFarm is OwnableUpgradeable, ReentrancyGuardUpgradeable, IPineco
     uint256 public constant SEC_PER_DAY = 1 days;
 
     address private constant DEAD = 0x000000000000000000000000000000000000dEaD;
+
+    mapping(address => bool) public whiteListContract;
 
     event Deposit(address indexed user, uint256 indexed pid, uint256 amount);
     event Withdraw(address indexed user, uint256 indexed pid, uint256 amount);
@@ -118,9 +118,9 @@ contract PineconeFarm is OwnableUpgradeable, ReentrancyGuardUpgradeable, IPineco
         startBlock = 0;
         totalPCTAllocPoint = 0; 
         pctPerProfitBNB = 4000e18;
-        devRewardsAddress = 0xc32Eb3766986f5E1E0b7F13b0Fc8eB2613d34720;
-        peRewardsAddress  = 0x7909c4c24dDBC253a14c5bC48255457c95897ca7;
-        calcDuration = 7 days;
+        devAddress = 0xc32Eb3766986f5E1E0b7F13b0Fc8eB2613d34720;
+        teamRewardsAddress = 0x2F568Ddea18582C3A36BD21514226eD203eF606a;
+        calcDuration = 5 days;
         claimCoolDown = 5 days;
     }
 
@@ -131,7 +131,15 @@ contract PineconeFarm is OwnableUpgradeable, ReentrancyGuardUpgradeable, IPineco
     }
 
     modifier onlyDev {
-        require(devRewardsAddress == msg.sender, "caller is not the dev");
+        require(devAddress == msg.sender, "caller is not the dev");
+        _;
+    }
+
+    modifier onlyEOAOrAuthContract {
+        if (whiteListContract[msg.sender] == false) {
+            require(!isContract(msg.sender), "contract not allowed");
+            require(msg.sender == tx.origin, "proxy contract not allowed");
+        }
         _;
     }
 
@@ -158,6 +166,10 @@ contract PineconeFarm is OwnableUpgradeable, ReentrancyGuardUpgradeable, IPineco
     modifier onlyMinter {
         require(isMinter(msg.sender) == true, "caller is not the minter");
         _;
+    }
+
+    function setAuthContract(address _contract, bool _auth) public onlyDev {
+        whiteListContract[_contract] = _auth;
     }
 
     function setClaimCoolDown(uint256 _duration) public onlyOwner {
@@ -254,14 +266,14 @@ contract PineconeFarm is OwnableUpgradeable, ReentrancyGuardUpgradeable, IPineco
         return _bnbProfit.mul(pctPerProfitBNB).div(1e18);
     }
 
-    function setDevRewardsAddress(address _addr) external {
-        require(devRewardsAddress == msg.sender, "no auth");
-        devRewardsAddress = _addr;
+    function setDevAddress(address _addr) external {
+        require(devAddress == msg.sender, "no auth");
+        devAddress = _addr;
     }
 
-    function setPeRewardsAddress(address _addr) external {
-        require(peRewardsAddress == msg.sender, "no auth");
-        peRewardsAddress = _addr;
+    function setTeamRewardsAddress(address _addr) external {
+        require(teamRewardsAddress == msg.sender, "no auth");
+        teamRewardsAddress = _addr;
     }
 
     function setPctPerBlock(uint256 _PCTPerBlock, uint256 _startBlock) public onlyOwner {
@@ -384,7 +396,7 @@ contract PineconeFarm is OwnableUpgradeable, ReentrancyGuardUpgradeable, IPineco
         
         _mint(address(this), PCTReward);
 
-        _mintForDevAndPE(PCTReward);
+        _mintForTeam(PCTReward);
 
         pool.accPCTPerShare = pool.accPCTPerShare.add(PCTReward.mul(1e12).div(sharesTotal));
         pool.lastRewardBlock = block.number;
@@ -398,7 +410,7 @@ contract PineconeFarm is OwnableUpgradeable, ReentrancyGuardUpgradeable, IPineco
         IPineconeToken(pctAddress).mint(_to, _amount);
     }
 
-    function deposit(uint256 _pid, uint256 _wantAmt) public payable nonReentrant {
+    function deposit(uint256 _pid, uint256 _wantAmt) public payable nonReentrant onlyEOAOrAuthContract {
         require(_wantAmt > 0, "_wantAmt <= 0");
         require(_pid != cakeRewardsStakingPid, "no auth");
 
@@ -425,7 +437,7 @@ contract PineconeFarm is OwnableUpgradeable, ReentrancyGuardUpgradeable, IPineco
     }
 
     // Withdraw LP tokens from MasterChef.
-    function withdraw(uint256 _pid, uint256 _wantAmt) public nonReentrant {
+    function withdraw(uint256 _pid, uint256 _wantAmt) public nonReentrant onlyEOAOrAuthContract {
         require(_wantAmt > 0, "_wantAmt <= 0");
         require(_pid != cakeRewardsStakingPid, "no auth");
 
@@ -441,7 +453,7 @@ contract PineconeFarm is OwnableUpgradeable, ReentrancyGuardUpgradeable, IPineco
         emit Withdraw(msg.sender, _pid, wantAmt);
     }
 
-    function withdrawAll(uint256 _pid) public nonReentrant {
+    function withdrawAll(uint256 _pid) public nonReentrant onlyEOAOrAuthContract {
         require(_pid != cakeRewardsStakingPid, "no auth");
 
         updatePool(_pid);
@@ -456,7 +468,7 @@ contract PineconeFarm is OwnableUpgradeable, ReentrancyGuardUpgradeable, IPineco
     }
 
     // Withdraw without caring about rewards. EMERGENCY ONLY.
-    function emergencyWithdraw(uint256 _pid) public nonReentrant {
+    function emergencyWithdraw(uint256 _pid) public nonReentrant onlyEOAOrAuthContract {
         require(_pid != cakeRewardsStakingPid, "no auth");
         (uint256 amount,,) = IPineconeStrategy(poolInfo[_pid].strat).withdrawAll(msg.sender);
         UserInfo storage user = userInfo[_pid][msg.sender];
@@ -466,7 +478,7 @@ contract PineconeFarm is OwnableUpgradeable, ReentrancyGuardUpgradeable, IPineco
         emit EmergencyWithdraw(msg.sender, _pid, amount);
     }
 
-    function claim(uint256 _pid) public nonReentrant {
+    function claim(uint256 _pid) public nonReentrant onlyEOAOrAuthContract {
         require(_pid != cakeRewardsStakingPid, "no auth");
         _claim(_pid);
     }
@@ -495,7 +507,7 @@ contract PineconeFarm is OwnableUpgradeable, ReentrancyGuardUpgradeable, IPineco
         return amount;
     }
 
-    function claimBNB() public nonReentrant {
+    function claimBNB() public nonReentrant onlyEOAOrAuthContract {
         _claimBNB(msg.sender, msg.sender);
     }
 
@@ -553,19 +565,16 @@ contract PineconeFarm is OwnableUpgradeable, ReentrancyGuardUpgradeable, IPineco
         uint256 mintPct = amountPctToMint(_Profit);
         if (mintPct == 0) return 0;
         _mint(_to, mintPct);
-        _mintForDevAndPE(mintPct);
+        _mintForTeam(mintPct);
         if (_to == address(this) && updatePCTRewards) {
             _updatePCTRewards(mintPct);
         }
         return mintPct;
     }
 
-    function _mintForDevAndPE(uint256 _amount) private {
-        uint256 pctForDev = _amount.mul(devPCTReward).div(1000);
-        _mint(devRewardsAddress, pctForDev);
-
-        uint256 pctForPe = _amount.mul(pePCTReward).div(1000);
-        _mint(peRewardsAddress, pctForPe);
+    function _mintForTeam(uint256 _amount) private {
+        uint256 pctForTeam = _amount.mul(teamPCTReward).div(1000);
+        _mint(teamRewardsAddress, pctForTeam);
     }
 
     function stakeRewardsTo(address _to, uint256 _amount) public onlyMinter {
@@ -576,7 +585,7 @@ contract PineconeFarm is OwnableUpgradeable, ReentrancyGuardUpgradeable, IPineco
         if (_amount == 0) return;
 
         if (_to == address(0)) {
-            _to = devRewardsAddress;
+            _to = teamRewardsAddress;
         }
 
         uint256 _pid = cakeRewardsStakingPid;
@@ -604,7 +613,6 @@ contract PineconeFarm is OwnableUpgradeable, ReentrancyGuardUpgradeable, IPineco
         } else {
             rewardAmt = pctTokenReward.accAmount.mul(SEC_PER_DAY).div(cap);
         }
-        rewardAmt = rewardAmt.add(PCTPerBlock.mul(1200*24));
         return rewardAmt;
     }
 
@@ -683,11 +691,8 @@ contract PineconeFarm is OwnableUpgradeable, ReentrancyGuardUpgradeable, IPineco
         if (mintPct == 0) return 0;
         _mint(_to, mintPct);
 
-        uint256 pctForDev = mintPct.mul(devPCTReward).div(1000);
-        _mint(devRewardsAddress, pctForDev);
-
-        uint256 pctForPe = mintPct.mul(pePCTReward).div(1000);
-        _mint(peRewardsAddress, pctForPe);
+        uint256 pctForTeam = mintPct.mul(teamPCTReward).div(1000);
+        _mint(teamRewardsAddress, pctForTeam);
 
         return mintPct;
     }
