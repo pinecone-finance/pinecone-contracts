@@ -37,6 +37,11 @@ contract PriceCalculator is IPriceCalculator, OwnableUpgradeable {
         setPairToken(VAI, BUSD);
     }
 
+
+    function pctToken() view public override returns(address) {
+        return PCT;
+    }
+
     /* ========== Restricted Operation ========== */
 
     function setPairToken(address asset, address pairToken) public onlyOwner {

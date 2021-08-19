@@ -10,6 +10,7 @@ interface IPriceCalculator {
     function priceOfCake() external view returns (uint256);
     function priceOfPct() external view returns (uint256);
     function priceOfToken(address token) external view returns(uint256);
+    function pctToken() external view returns(address);
 }
 
 interface IAlpacaCalculator {
@@ -32,4 +33,8 @@ interface IRabbitCalculator {
     function balanceOfib(uint256 pid, address account) external view returns(uint256);
     function vaultApr(address token, uint256 pid) external view returns(uint256 _apr, uint256 _rabbitApr);
     function ibToken(address token) external view returns(address);
+}
+
+interface IBSWCalculator {
+    function bswPoolDailyApr() external view returns(uint256);
 }

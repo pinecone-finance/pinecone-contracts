@@ -9,7 +9,10 @@ interface IPineconeToken {
     function isMinter(address _addr) external view returns(bool);
     function addPresaleUser(address _account) external;
     function maxTxAmount() external view returns(uint256);
-}
+    function isExcludedFromFee(address _account) external view returns(bool);
+    function isPresaleUser(address _account) external view returns(bool);
+    function totalHoldersFee() external view returns(uint256);
+ }
 
 interface IPineconeTokenCallee {
     function transferCallee(address from, address to) external;

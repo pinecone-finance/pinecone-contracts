@@ -1,41 +1,37 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.6.12;
 
-import "./interfaces/IRabbit.sol";
+import "./interfaces/IAlpaca.sol";
 import "./VaultBase.sol";
-import "./MdexStrat.sol";
+import "./BSWStratV2.sol";
 
 //Investment strategy
-contract VaultRabbitMdex is VaultBase, MdexStrat{
+contract VaultAlpacaBSW is VaultBase, BSWStratV2{
 
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
 
+    IFairLaunch public fairLaunch;
     uint256 public fairLaunchPid;
 
-    address public constant RABBIT = 0x95a1199EBA84ac5f19546519e287d43D2F0E1b41;
-    IBank public constant RabbitBank = IBank(0xc18907269640D11E2A91D7204f33C5115Ce3419e);
-    IFairLaunch public constant FairLaunch = IFairLaunch(0x81C1e8A6f8eB226aA7458744c5e12Fc338746571);
-    address public constant CAKE_ROUTER = 0x10ED43C718714eb63d5aA57B78B54704E256024E;
+    address constant ALPACA = 0x8F0528cE5eF7B51152A59745bEfDD91D97091d2F;
 
     function initialize (
         address _stakingToken,
+        address _stratAddress,
         uint256 _fairLaunchPid,
         address _config
     ) external initializer {
         fairLaunchPid = _fairLaunchPid;
+        IVaultConfig _vaultConfig = IVault(_stratAddress).config();
+        fairLaunch = IFairLaunch(_vaultConfig.getFairLaunchAddr());
 
-        _VaultBase_init(_config, address(RabbitBank));
-        _StratMdex_init(_stakingToken, RABBIT);
+        _VaultBase_init(_config, _stratAddress);
+        _StratBSW_init(_stakingToken, ALPACA);
 
-        _safeApprove(_stakingToken, address(RabbitBank));
-        address ibToken = _ibToken();
-        _safeApprove(ibToken, address(FairLaunch));
+        _safeApprove(_stakingToken, _stratAddress);
+        _safeApprove(_stratAddress, address(fairLaunch));
 
-        _safeApprove(stakingToken, CAKE_ROUTER);
-        _safeApprove(reawardToken, CAKE_ROUTER);
-        _safeApprove(CAKE, CAKE_ROUTER);
-        _safeApprove(WBNB, CAKE_ROUTER);
         IPineconeFarm pineconeFarm = config.pineconeFarm();
         _safeApprove(CAKE, address(pineconeFarm));
     }
@@ -43,13 +39,12 @@ contract VaultRabbitMdex is VaultBase, MdexStrat{
     receive() external payable {}
 
     /* ========== public view ========== */
-
     function farmPid() public view returns(uint256) {
         return fairLaunchPid;
     }
 
     function stakeType() public pure returns(StakeType) {
-        return StakeType.Rabbit_Mdex;
+        return StakeType.Alpaca_BSW;
     }
 
     function earned0Address() public view returns(address) {
@@ -85,30 +80,30 @@ contract VaultRabbitMdex is VaultBase, MdexStrat{
     }
 
     function tvl() public view returns(uint256 priceInUsd) {
-        (uint256 wantAmt, uint256 rabbitAmt, uint256 mdexAmt) = balance();
+        (uint256 wantAmt, uint256 alpacaAmt, uint256 bswAmt) = balance();
+        wantAmt = wantAmt.add(alpacaAmt);
         IPineconeConfig _config = config;
         uint256 wantTvl = wantAmt.mul(_config.priceOfToken(stakingToken)).div(UNIT);
-        uint256 rabbitTvl = rabbitAmt.mul(_config.priceOfToken(RABBIT)).div(UNIT);
-        uint256 mdexTvl = mdexAmt.mul(_config.priceOfToken(MDEX)).div(UNIT);
-        return wantTvl.add(rabbitTvl).add(mdexTvl);
+        uint256 bswTvl = bswAmt.mul(_config.priceOfToken(BSW)).div(UNIT);
+        return wantTvl.add(bswTvl);
     }
 
-    function balance() public view returns(uint256 wantAmt, uint256 rabbitAmt, uint256 mdexAmt) {
-        IRabbitCalculator rabbitCalculator = config.rabbitCalculator();
-        wantAmt = rabbitCalculator.balanceOf(_stakingTokenForRabbit(), fairLaunchPid, address(this));
-        rabbitAmt = FairLaunch.pendingRabbit(fairLaunchPid, address(this));
-        mdexAmt = _stakingMdex();
-        uint256 pendingMdex = _pendingMdex();
-        mdexAmt = mdexAmt.add(pendingMdex);
+    function balance() public view returns(uint256 wantAmt, uint256 alpacaAmt, uint256 bswAmt) {
+        IAlpacaCalculator alpacaCalculator = config.alpacaCalculator();
+        wantAmt = alpacaCalculator.balanceOf(stratAddress, fairLaunchPid, address(this));
+        alpacaAmt = fairLaunch.pendingAlpaca(fairLaunchPid, address(this));
+        bswAmt = _stakingBSW();
+        uint256 pendingBSW = _pendingBSW();
+        bswAmt = bswAmt.add(pendingBSW);
     }
 
-    function balanceOf(address _user) public view returns(uint256 wantAmt, uint256 mdexAmt) {
+    function balanceOf(address _user) public view returns(uint256 wantAmt, uint256 bswAmt) {
         if (sharesTotal == 0) {
             return (0,0);
         }
 
         wantAmt = 0;
-        mdexAmt = _earnedMdex(_user);
+        bswAmt = _earnedBSW(_user);
         uint256 shares = sharesOf(_user);
         if (shares != 0) {
             (wantAmt,,) = balance();
@@ -116,9 +111,9 @@ contract VaultRabbitMdex is VaultBase, MdexStrat{
         }
     }
 
-    function earnedOf(address _user) public view returns(uint256 wantAmt, uint256 mdexAmt) {
+    function earnedOf(address _user) public view returns(uint256 wantAmt, uint256 bswAmt) {
         UserAssetInfo storage user = users[_user];
-        (wantAmt, mdexAmt) = balanceOf(_user);
+        (wantAmt, bswAmt) = balanceOf(_user);
         if (wantAmt > user.depositAmt) {
             wantAmt = wantAmt.sub(user.depositAmt);
         } else {
@@ -127,15 +122,15 @@ contract VaultRabbitMdex is VaultBase, MdexStrat{
     }
 
     function pendingRewardsValue() public view returns(uint256 priceInUsd) {
-        uint256 pendingRabbit = FairLaunch.pendingRabbit(fairLaunchPid, address(this));
-        uint256 amt = IERC20(RABBIT).balanceOf(address(this));
-        pendingRabbit = pendingRabbit.add(amt);
-        uint256 pendingMdex = _pendingMdex();
+        uint256 pendingAlpaca = fairLaunch.pendingAlpaca(fairLaunchPid, address(this));
+        uint256 amt = IERC20(ALPACA).balanceOf(address(this));
+        pendingAlpaca = pendingAlpaca.add(amt);
+        uint256 pendingBSW = _pendingBSW();
 
         IPineconeConfig _config = config;
-        uint256 rabbitValue = pendingRabbit.mul(_config.priceOfToken(RABBIT)).div(UNIT);
-        uint256 mdexValue = pendingMdex.mul(_config.priceOfToken(MDEX)).div(UNIT);
-        return rabbitValue.add(mdexValue);
+        uint256 alpacaValue = pendingAlpaca.mul(_config.priceOfToken(ALPACA)).div(UNIT);
+        uint256 bswValue = pendingBSW.mul(_config.priceOfToken(BSW)).div(UNIT);
+        return alpacaValue.add(bswValue);
     }
 
     function pendingRewards(address _user) public view returns(uint256 wantAmt, uint256 pctAmt)
@@ -144,17 +139,20 @@ contract VaultRabbitMdex is VaultBase, MdexStrat{
             return (0, 0);
         }
 
-        (uint256 wantAmt0, uint256 mdexAmt) = earnedOf(_user);
+        (uint256 wantAmt0, uint256 bswAmt) = earnedOf(_user);
         wantAmt = wantAmt0;
-        IPineconeConfig _config = config;
-        uint256 mdexToAmt = _config.getAmountsOut(mdexAmt, MDEX, stakingToken, ROUTER);
-        wantAmt = wantAmt.add(mdexToAmt);
+        uint256 bswToAmt = ISmartRouter(smartRouter).getAmountOut(bswAmt, BSW, stakingToken, true);
+        wantAmt = wantAmt.add(bswToAmt);
         uint256 fee = performanceFee(wantAmt);
-        pctAmt = _config.tokenAmountPctToMint(stakingToken, fee);
+        pctAmt = config.tokenAmountPctToMint(stakingToken, fee);
         wantAmt = wantAmt.sub(fee);
     }
 
     /* ========== public write ========== */
+    function setSmartRouter(address _router) external onlyDev {
+        smartRouter = _router;
+    }
+
     function deposit(uint256 _wantAmt, address _user)
         public
         onlyOwner
@@ -179,13 +177,17 @@ contract VaultRabbitMdex is VaultBase, MdexStrat{
                 .mul(sharesTotal)
                 .div(wantTotal);
         }
-        
-        _farm();
+
+        _farmAlpaca();
+        _reawardTokenToBSW();
+        _claimBSW();
+        _farmBSW();
+
         sharesTotal = sharesTotal.add(sharesAdded);
-        uint256 pending = user.shares.mul(accPerShareOfMdex).div(1e12).sub(user.rewardPaid);
+        uint256 pending = user.shares.mul(accPerShareOfBSW).div(1e12).sub(user.rewardPaid);
         user.pending = user.pending.add(pending);
         user.shares = user.shares.add(sharesAdded);
-        user.rewardPaid = user.shares.mul(accPerShareOfMdex).div(1e12);
+        user.rewardPaid = user.shares.mul(accPerShareOfBSW).div(1e12);
 
         return sharesAdded;
     }
@@ -196,8 +198,8 @@ contract VaultRabbitMdex is VaultBase, MdexStrat{
     }
 
     function earn() public whenNotPaused onlyGov
-    {
-       _earn();
+    {   
+        _earn();
     }
 
     function withdrawAll(address _user)
@@ -213,12 +215,12 @@ contract VaultRabbitMdex is VaultBase, MdexStrat{
         require(user.depositAmt > 0, "depositAmt <= 0");
 
         uint256 wantAmt = user.depositAmt;
-        (uint256 earnedWantAmt, uint256 mdexAmt) = earnedOf(_user);
+        (uint256 earnedWantAmt, uint256 bswAmt) = earnedOf(_user);
 
         _withdrawWant(wantAmt.add(earnedWantAmt));
-        _withdrawMdex(mdexAmt);
+        _withdrawBSW(bswAmt);
 
-        uint256 swapAmt = _swap(stakingToken, mdexAmt, _tokenPath(MDEX, stakingToken), ROUTER);
+        uint256 swapAmt = _swap(bswAmt, BSW, stakingToken);
         earnedWantAmt = earnedWantAmt.add(swapAmt);
 
         address wNativeRelayer = config.wNativeRelayer();
@@ -257,7 +259,7 @@ contract VaultRabbitMdex is VaultBase, MdexStrat{
         user.pending = 0;
         user.rewardPaid = 0;
     
-        _farm();
+        _earn();
         return (wantAmt, earnedWantAmt, pctAmt);
     }
 
@@ -275,13 +277,12 @@ contract VaultRabbitMdex is VaultBase, MdexStrat{
         require(user.depositAmt > 0, "depositAmt <= 0");
 
         (uint256 wantAmt, uint256 sharesRemoved) = _withdraw(_wantAmt, _user);
-        _farm();
+        _earn();
         sharesTotal = sharesTotal.sub(sharesRemoved);
-        uint256 pending = user.shares.mul(accPerShareOfMdex).div(1e12).sub(user.rewardPaid);
+        uint256 pending = user.shares.mul(accPerShareOfBSW).div(1e12).sub(user.rewardPaid);
         user.pending = user.pending.add(pending);
         user.shares = user.shares.sub(sharesRemoved);
-        user.rewardPaid = user.shares.mul(accPerShareOfMdex).div(1e12);
-
+        user.rewardPaid = user.shares.mul(accPerShareOfBSW).div(1e12);
         return (wantAmt, sharesRemoved);
     }
 
@@ -292,10 +293,10 @@ contract VaultRabbitMdex is VaultBase, MdexStrat{
         returns(uint256, uint256)
     {
         (uint256 rewardAmt, uint256 pct) = _claim(_user);
-        _farm();
+        _earn();
         UserAssetInfo storage user = users[_user];
         user.pending = 0;
-        user.rewardPaid = user.shares.mul(accPerShareOfMdex).div(1e12);
+        user.rewardPaid = user.shares.mul(accPerShareOfBSW).div(1e12);
         return (rewardAmt, pct);
     }
 
@@ -305,14 +306,19 @@ contract VaultRabbitMdex is VaultBase, MdexStrat{
     {
         require(_token != config.PCT(), "!safe");
         require(_token != stakingToken, "!safe");
-        require(_token != RABBIT, "!safe");
-        require(_token != MDEX, "!safe");
+        require(_token != ALPACA, "!safe");
+        require(_token != BSW, "!safe");
         IERC20(_token).safeTransfer(msg.sender, _amount);
     }
 
     /* ========== private methord ========== */
     function _farm() private 
     {
+        _farmAlpaca();
+        _farmBSW();
+    }
+
+    function _farmAlpaca() private {
         if (stakingToken == WBNB) {
             uint256 wantAmt = IERC20(stakingToken).balanceOf(address(this));
             if (wantAmt > 0) {
@@ -322,30 +328,31 @@ contract VaultRabbitMdex is VaultBase, MdexStrat{
             }
             wantAmt = address(this).balance;
             if (wantAmt > 0) {
-                IBank(stratAddress).deposit{value:wantAmt}(address(0), wantAmt);
+                IVault(stratAddress).deposit{value:wantAmt}(wantAmt);
             }
         } else {
             uint256 wantAmt = IERC20(stakingToken).balanceOf(address(this));
             if (wantAmt > 0) {
-                IBank(stratAddress).deposit(stakingToken, wantAmt);
+                IVault(stratAddress).deposit(wantAmt);
             }
         }
 
-        uint256 ibAmt = IERC20(_ibToken()).balanceOf(address(this));
+        uint256 ibAmt = IERC20(stratAddress).balanceOf(address(this));
         if (ibAmt > 0) {
-            FairLaunch.deposit(address(this), fairLaunchPid, ibAmt);
+            fairLaunch.deposit(address(this), fairLaunchPid, ibAmt);
         }
+    }
 
-        _reawardTokenToMdex();
-        _claimMdex();
-        _farmMdex();
+    function _claimAlpaca() private {
+        if (fairLaunch.pendingAlpaca(fairLaunchPid, address(this)) > 0) {
+            fairLaunch.harvest(fairLaunchPid);
+        }
     }
 
     function _earn() private {
-         //auto compounding rabbit + mdex
-        if (FairLaunch.pendingRabbit(fairLaunchPid, address(this)) > 0) {
-            FairLaunch.harvest(fairLaunchPid);
-        }
+        _claimAlpaca();
+        _reawardTokenToBSW();
+        _claimBSW();
         _farm();
     }
 
@@ -360,7 +367,7 @@ contract VaultRabbitMdex is VaultBase, MdexStrat{
         if (sharesRemoved > user.shares) {
             sharesRemoved = user.shares;
         }
-    
+
         _withdrawWant(_wantAmt);
         uint256 wantAmt = IERC20(stakingToken).balanceOf(address(this));
         if (_wantAmt > wantAmt) {
@@ -381,22 +388,27 @@ contract VaultRabbitMdex is VaultBase, MdexStrat{
 
     function _withdrawWant(uint256 amount) private  {
         if (amount == 0) return;
-        amount = RabbitBank.ibTokenCalculation(_stakingTokenForRabbit(), amount);
-        IRabbitCalculator rabbitCalculator = config.rabbitCalculator();
-        uint256 amt = rabbitCalculator.balanceOfib(fairLaunchPid, address(this));
+        IAlpacaCalculator alpacaCalculator = config.alpacaCalculator();
+        amount = alpacaCalculator.ibTokenCalculation(stratAddress, amount);
+        uint256 amt = alpacaCalculator.balanceOfib(stratAddress, fairLaunchPid, address(this));
         if (amount > amt) {
             amount = amt;
         }
-        FairLaunch.withdraw(address(this), fairLaunchPid, amount);
-        RabbitBank.withdraw(_stakingTokenForRabbit(), amount);
+        fairLaunch.withdraw(address(this), fairLaunchPid, amount);
+        amt = IERC20(stratAddress).balanceOf(address(this));
+        if (amount > amt) {
+            amount = amt;
+        }
+
+        IVault(stratAddress).withdraw(amount);
         if (stakingToken == WBNB && address(this).balance > 0) {
             IWETH(WBNB).deposit{value:address(this).balance}();
         }
     }
 
     function _claim(address _user) private returns(uint256, uint256) {
-        (uint256 wantAmt, uint256 mdexAmt) = earnedOf(_user);
-        if (wantAmt == 0 && mdexAmt == 0) {
+        (uint256 wantAmt, uint256 bswAmt) = earnedOf(_user);
+        if (wantAmt == 0 && bswAmt == 0) {
             return(0,0);
         }
         UserAssetInfo storage user = users[_user];
@@ -414,9 +426,9 @@ contract VaultRabbitMdex is VaultBase, MdexStrat{
         } 
 
         _withdrawWant(wantAmt);
-        _withdrawMdex(mdexAmt);
+        _withdrawBSW(bswAmt);
 
-        uint256 swapAmt = _swap(stakingToken, mdexAmt, _tokenPath(MDEX, stakingToken), ROUTER);
+        uint256 swapAmt = _swap(bswAmt, BSW, stakingToken);
         wantAmt = wantAmt.add(swapAmt);
 
         uint256 balanceAmt = IERC20(stakingToken).balanceOf(address(this));
@@ -440,23 +452,13 @@ contract VaultRabbitMdex is VaultBase, MdexStrat{
         fee = performanceFee(_wantAmt);
         if (fee > 0) {
             IPineconeFarm pineconeFarm = config.pineconeFarm();
-            uint256 profit = config.getAmountsOut(fee, stakingToken, WBNB, CAKE_ROUTER);
+            uint256 profit = ISmartRouter(smartRouter).getAmountOut(fee, stakingToken, WBNB, CAKE_ROUTER);
             pct = pineconeFarm.mintForProfit(_user, profit, false);
 
-            uint256 cakeAmt = _swap(CAKE, fee, _tokenPath(stakingToken, CAKE), CAKE_ROUTER);
+            uint256 cakeAmt = _swap(CAKE, fee, ISmartRouter(smartRouter).tokenPath(stakingToken, CAKE), CAKE_ROUTER);
             if (cakeAmt > 0) {
                 pineconeFarm.stakeRewardsTo(address(pineconeFarm), cakeAmt);
             }
         }
     }
-
-    function _stakingTokenForRabbit() private view returns(address) {
-        return (stakingToken == WBNB ) ? address(0) : stakingToken;
-    }
-
-    function _ibToken() private view returns(address) {
-        IRabbitCalculator calculator = config.rabbitCalculator();
-        address ibToken = calculator.ibToken(_stakingTokenForRabbit());
-        return ibToken;
-    }
-}   
+}

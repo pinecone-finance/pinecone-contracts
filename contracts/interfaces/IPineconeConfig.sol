@@ -13,7 +13,8 @@ interface IPineconeConfig {
     function priceOfToken(address _token) external view returns(uint256);
     function priceOfPct() external view returns(uint256);
     function tokenAmountPctToMint(address _token, uint256 _profit) external view returns(uint256);
-    function getAmountsOut(uint256 amount, address token0, address token1) external view returns (uint256);
+    function tokenAmountPctToMint(address _token, uint256 _profit, address _router) external view returns(uint256);
+    function getAmountsOut(uint256 amount, address token0, address token1, address router) external view returns (uint256);
     function wNativeRelayer() external view returns (address);
     function rabbitCalculator() external view returns(IRabbitCalculator);
 }

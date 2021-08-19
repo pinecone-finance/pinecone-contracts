@@ -13,6 +13,7 @@ import "../helpers/ERC20.sol";
 import "../interfaces/IPancakeFactory.sol";
 import "../interfaces/IAlpaca.sol";
 import "../interfaces/IERC20.sol";
+import "../interfaces/IPineconeToken.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 
 contract BSCDashboard is OwnableUpgradeable {
@@ -39,6 +40,7 @@ contract BSCDashboard is OwnableUpgradeable {
 
     IMdexCalculator public mdexCalculator;
     IRabbitCalculator public rabbitCalculator;
+    IBSWCalculator public bswCalculator;
 
     function initialize() external initializer {
         __Ownable_init();
@@ -66,6 +68,10 @@ contract BSCDashboard is OwnableUpgradeable {
 
     function setRabbitCalculator(address addr) external onlyOwner {
         rabbitCalculator = IRabbitCalculator(addr);
+    }
+
+    function setBSWCalculator(address addr) external onlyOwner {
+        bswCalculator = IBSWCalculator(addr);
     }
 
     function cakePerYearOfPool(uint256 pid) public view returns(uint256) {
@@ -136,7 +142,7 @@ contract BSCDashboard is OwnableUpgradeable {
         uint256 wex_daily_apr = wexCalculator.wexPoolDailyApr();
         uint256 wex_apy = compundApy(wex_daily_apr);
         alpacaCompoundingApy = base_daily_apr.mul(wex_apy).div(wex_daily_apr);
-        vaultApy = vaultApr;
+        vaultApy = compundApy(vaultApr/365);
         totalApy = vaultApy.add(alpacaCompoundingApy);
     }
 
@@ -154,7 +160,7 @@ contract BSCDashboard is OwnableUpgradeable {
         uint256 mdex_daily_apr = mdexCalculator.mdexPoolDailyApr();
         uint256 mdex_apy = compundApy(mdex_daily_apr);
         rabbitCompoundingApy = base_daily_apr.mul(mdex_apy).div(mdex_daily_apr);
-        vaultApy = vaultApr;
+        vaultApy = compundApy(vaultApr/365);
         totalApy = vaultApy.add(rabbitCompoundingApy);
     }
 
@@ -165,6 +171,73 @@ contract BSCDashboard is OwnableUpgradeable {
         mdx_apy = base_daily_apr.mul(mdx_apy).div(mdx_daily_apr);
         return mdx_apy;
     }
+
+    function vaultCakeApyOfBSW(uint256 cakePid) public view returns(uint256) {
+        uint256 base_daily_apr = cakePoolDailyApr(cakePid);
+        uint256 bsw_daily_apr = bswCalculator.bswPoolDailyApr();
+        uint256 bsw_apy = compundApy(bsw_daily_apr);
+        base_daily_apr = base_daily_apr.mul(UNIT + bsw_daily_apr).div(UNIT);
+        bsw_apy = base_daily_apr.mul(bsw_apy).div(bsw_daily_apr);
+        return bsw_apy;
+    }
+
+    function vaultRabbitApyOfCake(address token, uint256 pid) public view returns(uint256 totalApy, uint256 vaultApy, uint256 rabbitCompoundingApy) {
+        (uint256 vaultApr, uint256 rabbitApr) = rabbitCalculator.vaultApr(token, pid);
+        uint256 base_daily_apr = rabbitApr/ 365;
+        uint256 cake_daily_apr = cakePoolDailyApr(0);
+        uint256 cake_apy = compundApy(cake_daily_apr);
+        base_daily_apr = base_daily_apr.mul(UNIT + cake_daily_apr).div(UNIT);
+        rabbitCompoundingApy = base_daily_apr.mul(cake_apy).div(cake_daily_apr);
+        vaultApy = compundApy(vaultApr/365);
+        totalApy = vaultApy.add(rabbitCompoundingApy);
+    }
+
+    function vaultAlpacaApyOfBSW(address vault, uint256 pid) public view returns(uint256 totalApy, uint256 vaultApy, uint256 alpacaCompoundingApy) {
+        (uint256 vaultApr, uint256 alpacaApr) = alpacaCalculator.vaultApr(vault, pid);
+        uint256 base_daily_apr = alpacaApr/ 365;
+        uint256 bsw_daily_apr = bswCalculator.bswPoolDailyApr();
+        uint256 bsw_apy = compundApy(bsw_daily_apr);
+        base_daily_apr = base_daily_apr.mul(UNIT + bsw_daily_apr).div(UNIT);
+        alpacaCompoundingApy = base_daily_apr.mul(bsw_apy).div(bsw_daily_apr);
+        vaultApy = compundApy(vaultApr/365);
+        totalApy = vaultApy.add(alpacaCompoundingApy);
+    }
+
+    function vaultRabbitDAprOfCake(address token, uint256 pid) public view 
+        returns(
+            uint256 stakingTokenDApr, 
+            uint256 rewardTokenDApr, 
+            uint256 highYeildDApr
+        ) 
+    {
+        (uint256 vaultApr, uint256 rabbitApr) = rabbitCalculator.vaultApr(token, pid);
+        stakingTokenDApr = vaultApr / 365;
+        rewardTokenDApr = rabbitApr/ 365;
+        highYeildDApr = cakePoolDailyApr(0);
+    }
+
+    function vaultCakeDAprOfBSW(uint256 cakePid) public view 
+        returns(
+           uint256 cakeDapr, 
+           uint256 bswDapr
+        ) 
+    {
+        cakeDapr = cakePoolDailyApr(cakePid);
+        bswDapr = bswCalculator.bswPoolDailyApr();
+    }
+
+    function vaultAlpacaDAprOfBSW(address vault, uint256 pid) public view 
+        returns(
+            uint256 stakingTokenDApr, 
+            uint256 rewardTokenDApr, 
+            uint256 highYeildDApr
+        ) 
+    {
+        (uint256 vaultApr, uint256 alpacaApr) = alpacaCalculator.vaultApr(vault, pid);
+        stakingTokenDApr = vaultApr / 365;
+        rewardTokenDApr = alpacaApr/ 365;
+        highYeildDApr = bswCalculator.bswPoolDailyApr();
+    } 
 
     function apyOfPool(
         uint256 pid,
@@ -185,26 +258,7 @@ contract BSCDashboard is OwnableUpgradeable {
         StakeType _type = IPineconeStrategy(strat).stakeType();
         uint256 earnedPctApy = earnedApy(pid);
         uint256 fee = IPineconeStrategy(strat).performanceFee(UNIT);
-        if(_type == StakeType.Alpaca_Wex) {
-            address farmAddress = IPineconeStrategy(strat).stratAddress();
-            uint256 farmPid = IPineconeStrategy(strat).farmPid();
-            (uint256 _apy,,) = vaultAlpacaApyOfWex(farmAddress, farmPid);
-            uint256 alpaca_apy = _apy.mul(UNIT - fee).div(UNIT);
-            uint256 toPctAmount = pctToTokenAmount(want);
-            uint256 pct_apy =  _apy.mul(fee).div(UNIT);
-            pct_apy = pct_apy.mul(toPctAmount).div(UNIT);
-            earned0Apy = alpaca_apy;
-            earned1Apy = pct_apy.add(earnedPctApy);
-        }
-        else if (_type == StakeType.Cake_Wex) {
-            uint256 _apy = vaultCakeApyOfWex(cakePid);
-            uint256 cake_apy = _apy.mul(UNIT - fee).div(UNIT);
-            uint256 toPctAmount = pctToTokenAmount(address(CAKE));
-            uint256 pct_apy =  _apy.mul(fee).div(UNIT);
-            pct_apy = pct_apy.mul(toPctAmount).div(UNIT);
-            earned0Apy = cake_apy;
-            earned1Apy = pct_apy.add(earnedPctApy);
-        } else if (_type == StakeType.Rabbit_Mdex) {
+        if (_type == StakeType.Rabbit_Mdex) {
             address token  = IPineconeStrategy(strat).stakingToken();
             uint256 farmPid = IPineconeStrategy(strat).farmPid();
             (uint256 _apy,,) = vaultRabbitApyOfMdex(token, farmPid);
@@ -224,6 +278,44 @@ contract BSCDashboard is OwnableUpgradeable {
             earned1Apy = pct_apy.add(earnedPctApy);
         } else if (_type == StakeType.PCTPair) {
             earned0Apy = 0;
+            earned1Apy = earnedPctApy;
+        } else if (_type == StakeType.Rabbit_Cake) {
+            address token  = IPineconeStrategy(strat).stakingToken();
+            uint256 farmPid = IPineconeStrategy(strat).farmPid();
+            (uint256 _apy,,) = vaultRabbitApyOfCake(token, farmPid);
+            uint256 rabbit_apy = _apy.mul(UNIT - fee).div(UNIT);
+            uint256 toPctAmount = pctToTokenAmount(want);
+            uint256 pct_apy =  _apy.mul(fee).div(UNIT);
+            pct_apy = pct_apy.mul(toPctAmount).div(UNIT);
+            earned0Apy = rabbit_apy;
+            earned1Apy = pct_apy.add(earnedPctApy);
+        } else if (_type == StakeType.Cake_BSW) {
+            uint256 _apy = vaultCakeApyOfBSW(cakePid);
+            uint256 cake_apy = _apy.mul(UNIT - fee).div(UNIT);
+            uint256 toPctAmount = pctToTokenAmount(address(CAKE));
+            uint256 pct_apy =  _apy.mul(fee).div(UNIT);
+            pct_apy = pct_apy.mul(toPctAmount).div(UNIT);
+            earned0Apy = cake_apy;
+            earned1Apy = pct_apy.add(earnedPctApy);
+        } else if (_type == StakeType.Alpaca_BSW) {
+            address vault  = IPineconeStrategy(strat).stratAddress();
+            uint256 farmPid = IPineconeStrategy(strat).farmPid();
+            (uint256 _apy,,) = vaultAlpacaApyOfBSW(vault, farmPid);
+            uint256 alpaca_apy = _apy.mul(UNIT - fee).div(UNIT);
+            uint256 toPctAmount = pctToTokenAmount(address(CAKE));
+            uint256 pct_apy =  _apy.mul(fee).div(UNIT);
+            pct_apy = pct_apy.mul(toPctAmount).div(UNIT);
+            earned0Apy = alpaca_apy;
+            earned1Apy = pct_apy.add(earnedPctApy);
+        } else if (_type == StakeType.PCT) {
+            earned0Apy = 0;
+            uint256 pool_tvl = tvlOfPool(pid);
+            if (pool_tvl > 0) {
+                uint256 cakeAmt = IVaultPCT(strat).cakeDailyReward() / 2;
+                cakeAmt = cakeAmt.mul(365);
+                uint256 earnedCakeValue = cakeAmt.mul(priceCalculator.priceOfCake()).div(UNIT);
+                earned0Apy = earnedCakeValue.mul(UNIT).div(pool_tvl);
+            }
             earned1Apy = earnedPctApy;
         }
     }
@@ -247,6 +339,16 @@ contract BSCDashboard is OwnableUpgradeable {
             return 0;
         }
         return IPineconeStrategy(strat).tvl();
+    }
+
+    function tvlOfPool2(uint256 pid) public view returns(address want, address strat, uint256 priceInUsd, uint256 amount) {
+        (want, strat) = pineconeFarm.poolInfoOf(pid);
+        if (strat == address(0)) {
+            return (want,strat,0,0);
+        }
+
+        priceInUsd = IPineconeStrategy(strat).tvl();
+        amount = priceInUsd.mul(UNIT).div(priceCalculator.priceOfToken(want));
     }
 
     function pctToTokenAmount(address token) public view returns(uint256) {
@@ -277,5 +379,72 @@ contract BSCDashboard is OwnableUpgradeable {
         )
     {
         (depositedAt, depositAmt, balance, earned0Amt, earned1Amt, withdrawableAmt) = pineconeFarm.userInfoOfPool(pid, user);
+    }
+
+    function pctFeeOfUser(address user) public view returns(
+        uint256 buyFee,
+        uint256 sellFee,
+        uint256 txFee
+    ) {
+        address pct = priceCalculator.pctToken();
+        bool ret = IPineconeToken(pct).isExcludedFromFee(user);
+        if (ret == true) {
+            return (0,0,0);
+        }
+
+        ret = IPineconeToken(pct).isPresaleUser(user);
+        if (ret == true) {
+            return (0,5,0);
+        }
+
+        return (5,10,10);
+    }
+
+    function pendingRewardsValue(uint256 pid) public view returns(uint256) {
+        (, address strat) = pineconeFarm.poolInfoOf(pid);
+        if (strat == address(0)) {
+            return (0);
+        }
+
+        return IPineconeStrategy(strat).pendingRewardsValue();
+    }
+
+    function aprOfPool(uint256 pid) public view 
+        returns(
+            uint256 stakingTokenDApr, 
+            uint256 rewardTokenDApr, 
+            uint256 highYeildDApr, 
+            uint256 pctDApr,
+            uint256 pctPremium,
+            uint256 pctFee
+        ) 
+    {
+        (address want, address strat) = pineconeFarm.poolInfoOf(pid);
+        if (strat == address(0)) {
+            return (0,0,0,0,0,0);
+        }
+
+        stakingTokenDApr = 0;
+        rewardTokenDApr = 0;
+        highYeildDApr = 0;
+        pctPremium = 0;
+        pctDApr = earnedApy(pid)/365;
+        pctFee = IPineconeStrategy(strat).performanceFee(UNIT);
+        StakeType _type = IPineconeStrategy(strat).stakeType();
+        if (_type == StakeType.Rabbit_Cake) {
+            address token  = IPineconeStrategy(strat).stakingToken();
+            uint256 farmPid = IPineconeStrategy(strat).farmPid();
+            (stakingTokenDApr, rewardTokenDApr, highYeildDApr) = vaultRabbitDAprOfCake(token, farmPid);
+            pctPremium = pctToTokenAmount(want);
+        } else if (_type == StakeType.Cake_BSW) {
+            (stakingTokenDApr, highYeildDApr) = vaultCakeDAprOfBSW(0);
+            rewardTokenDApr = stakingTokenDApr;
+            pctPremium = pctToTokenAmount(address(CAKE));
+        } else if (_type == StakeType.Alpaca_BSW) {
+            address vault  = IPineconeStrategy(strat).stratAddress();
+            uint256 farmPid = IPineconeStrategy(strat).farmPid();
+            (stakingTokenDApr, rewardTokenDApr, highYeildDApr) = vaultAlpacaDAprOfBSW(vault, farmPid);
+            pctPremium = pctToTokenAmount(want);
+        }
     }
 }

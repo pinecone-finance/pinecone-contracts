@@ -12,7 +12,7 @@ contract VaultRewardsCakeBSW is VaultBase, BSWStrat{
 
     uint256 public manageFee; 
     uint256 public constant manageFeeMax = 10000; // 100 = 1%
-    uint256 public constant manageFeeUL = 3000; // max 30%
+    uint256 public constant manageFeeUL = 5000; // max 50%
     mapping (address => bool) private _isExcludedFromFee;
     address public constant CAKE_ROUTER = 0x10ED43C718714eb63d5aA57B78B54704E256024E;
 
@@ -34,7 +34,7 @@ contract VaultRewardsCakeBSW is VaultBase, BSWStrat{
         _safeApprove(WBNB, CAKE_ROUTER);
 
         _isExcludedFromFee[msg.sender] = true;
-        manageFee = 3000;
+        manageFee = 5000;
     }
 
     receive() external payable {}
@@ -166,7 +166,10 @@ contract VaultRewardsCakeBSW is VaultBase, BSWStrat{
             _shares
         );
         sharesTotal = sharesTotal.add(_shares);
-        _farm();
+        _farmCake();
+        _reawardCakeToBSW();
+        _claimBSW();
+        _farmBSW();
         return _shares;
     }
 
@@ -199,13 +202,13 @@ contract VaultRewardsCakeBSW is VaultBase, BSWStrat{
         uint256 swapAmt = _swap(CAKE, bswAmt, _tokenPath(BSW, CAKE), ROUTER);
         wantAmt = wantAmt.add(swapAmt);
 
-        uint256 earnedCakeAmt = cakeAmt.add(swapAmt);
+        /*uint256 earnedCakeAmt = cakeAmt.add(swapAmt);
         if (earnedCakeAmt > dust) {
             IPineconeConfig _config = config;
             IPineconeFarm pineconeFarm = _config.pineconeFarm();
             uint256 profit = _config.getAmountsOut(earnedCakeAmt, CAKE, WBNB, CAKE_ROUTER);
             pineconeFarm.mintForProfit(address(pineconeFarm), profit, true);
-        }
+        }*/
 
         uint256 balanceAmt = IERC20(CAKE).balanceOf(address(this));
         if (wantAmt > balanceAmt) {

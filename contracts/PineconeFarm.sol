@@ -79,6 +79,9 @@ contract PineconeFarm is OwnableUpgradeable, ReentrancyGuardUpgradeable, IPineco
 
     mapping(address => bool) public whiteListContract;
 
+    uint256 public pctStakingPid;
+    uint256 public cakeRewardsStakingNewPid;
+
     event Deposit(address indexed user, uint256 indexed pid, uint256 amount);
     event Withdraw(address indexed user, uint256 indexed pid, uint256 amount);
     event EmergencyWithdraw(
@@ -172,7 +175,7 @@ contract PineconeFarm is OwnableUpgradeable, ReentrancyGuardUpgradeable, IPineco
         whiteListContract[_contract] = _auth;
     }
 
-    function setClaimCoolDown(uint256 _duration) public onlyOwner {
+    function setClaimCoolDown(uint256 _duration) public onlyDev {
         claimCoolDown = _duration;
     }
 
@@ -186,7 +189,6 @@ contract PineconeFarm is OwnableUpgradeable, ReentrancyGuardUpgradeable, IPineco
         if (pool.allocPCTPoint == 0 || totalPCTAllocPoint == 0) {
             return 0;
         } else {
-
             uint256 earned0 = pctDailyReward().mul(pool.allocPCTPoint).div(totalPCTAllocPoint);
             uint256 earned1 = PCTPerBlock.mul(pool.allocPCTPoint).div(totalPCTAllocPoint).mul(28800);
             return earned0 + earned1;
@@ -216,6 +218,9 @@ contract PineconeFarm is OwnableUpgradeable, ReentrancyGuardUpgradeable, IPineco
 
         uint256 pctAmt = pendingPCT(_pid, _user);    
         (depositedAt, depositAmt, balanceValue, earned0Amt, earned1Amt, withdrawbaleAmt) = IPineconeStrategy(pool.strat).userInfoOf(_user, pctAmt);
+        if (_pid == pctStakingPid && pctStakingPid > 0) {
+            earned0Amt = pendingBNB2(_user);
+        }
     }
 
     // Add a new lp to the pool. Can only be called by the owner.
@@ -285,9 +290,19 @@ contract PineconeFarm is OwnableUpgradeable, ReentrancyGuardUpgradeable, IPineco
     }
 
     function setCakeRewardsPid(
-        uint256 _cakeRewardsPid)
-    public onlyOwner {
+        uint256 _cakeRewardsPid
+    ) public onlyOwner {
         cakeRewardsStakingPid = _cakeRewardsPid;
+    }
+
+    function setCakeRewardsNewPid(
+        uint256 _cakeRewardPid
+    ) public onlyDev {
+        cakeRewardsStakingNewPid = _cakeRewardPid;
+    }
+
+    function setPCTStakingPid(uint256 _pid) public onlyDev {
+        pctStakingPid = _pid;
     }
 
     // Return reward multiplier over the given _from to _to block.
@@ -359,6 +374,13 @@ contract PineconeFarm is OwnableUpgradeable, ReentrancyGuardUpgradeable, IPineco
         claimed = user.claimed;
     }
 
+    function pendingBNB2(address _user) public view returns(uint256) {
+        PoolInfo storage pool = poolInfo[pctStakingPid];
+        (uint256 bnbAmt, ) = IPineconeStrategy(pool.strat).pendingRewards(_user);
+        PoolInfo storage cakePool = poolInfo[cakeRewardsStakingNewPid];
+        return IPineconeStrategy(cakePool.strat).pendingBNB(bnbAmt, _user);
+    }
+
     // Update reward variables for all pools. Be careful of gas spending!
     function massUpdatePools() public 
     {
@@ -413,6 +435,9 @@ contract PineconeFarm is OwnableUpgradeable, ReentrancyGuardUpgradeable, IPineco
     function deposit(uint256 _pid, uint256 _wantAmt) public payable nonReentrant onlyEOAOrAuthContract {
         require(_wantAmt > 0, "_wantAmt <= 0");
         require(_pid != cakeRewardsStakingPid, "no auth");
+        if (cakeRewardsStakingNewPid > 0) {
+            require(_pid != cakeRewardsStakingNewPid, "no auth");
+        }
 
         updatePool(_pid);
         PoolInfo storage pool = poolInfo[_pid];
@@ -440,6 +465,9 @@ contract PineconeFarm is OwnableUpgradeable, ReentrancyGuardUpgradeable, IPineco
     function withdraw(uint256 _pid, uint256 _wantAmt) public nonReentrant onlyEOAOrAuthContract {
         require(_wantAmt > 0, "_wantAmt <= 0");
         require(_pid != cakeRewardsStakingPid, "no auth");
+        if (cakeRewardsStakingNewPid > 0) {
+            require(_pid != cakeRewardsStakingNewPid, "no auth");
+        }
 
         updatePool(_pid);
         PoolInfo storage pool = poolInfo[_pid];
@@ -455,11 +483,20 @@ contract PineconeFarm is OwnableUpgradeable, ReentrancyGuardUpgradeable, IPineco
 
     function withdrawAll(uint256 _pid) public nonReentrant onlyEOAOrAuthContract {
         require(_pid != cakeRewardsStakingPid, "no auth");
+        if (cakeRewardsStakingNewPid > 0) {
+            require(_pid != cakeRewardsStakingNewPid, "no auth");
+        }
 
         updatePool(_pid);
         (uint256 amount, uint256 reward, uint256 rewardPct) = IPineconeStrategy(poolInfo[_pid].strat).withdrawAll(msg.sender);
         uint256 pct = _claimPendingPCT(_pid, msg.sender);
         pct = pct.add(rewardPct);
+        if (_pid == pctStakingPid && pctStakingPid > 0) {
+            if (reward > 0) {
+                PoolInfo storage cakePool = poolInfo[cakeRewardsStakingNewPid];
+                reward = IPineconeStrategy(cakePool.strat).claimBNB(reward, msg.sender);
+            }
+        }
         UserInfo storage user = userInfo[_pid][msg.sender];
         user.shares = 0;
         user.pending = 0;
@@ -470,6 +507,9 @@ contract PineconeFarm is OwnableUpgradeable, ReentrancyGuardUpgradeable, IPineco
     // Withdraw without caring about rewards. EMERGENCY ONLY.
     function emergencyWithdraw(uint256 _pid) public nonReentrant onlyEOAOrAuthContract {
         require(_pid != cakeRewardsStakingPid, "no auth");
+        if (cakeRewardsStakingNewPid > 0) {
+            require(_pid != cakeRewardsStakingNewPid, "no auth");
+        }
         (uint256 amount,,) = IPineconeStrategy(poolInfo[_pid].strat).withdrawAll(msg.sender);
         UserInfo storage user = userInfo[_pid][msg.sender];
         user.shares = 0;
@@ -480,6 +520,9 @@ contract PineconeFarm is OwnableUpgradeable, ReentrancyGuardUpgradeable, IPineco
 
     function claim(uint256 _pid) public nonReentrant onlyEOAOrAuthContract {
         require(_pid != cakeRewardsStakingPid, "no auth");
+        if (cakeRewardsStakingNewPid > 0) {
+            require(_pid != cakeRewardsStakingNewPid, "no auth");
+        }
         _claim(_pid);
     }
 
@@ -511,13 +554,13 @@ contract PineconeFarm is OwnableUpgradeable, ReentrancyGuardUpgradeable, IPineco
         _claimBNB(msg.sender, msg.sender);
     }
 
-    function _claimBNB(address _user, address _to) private {
+    function _claimBNB(address _user, address _to) private{
         UserRewardBNB storage user = userRewardBNB[_user];
-        require(user.shares > 0, "no shares!");
         require(user.lastRewardTime + claimCoolDown <= block.timestamp, "cool down!");
         uint256 accPerShare = cakeTokenReward.accPerShare;
         uint256 pending = user.shares.mul(accPerShare).div(1e12).sub(user.rewardPaid);
         uint256 amount = user.pending.add(pending);
+        require(amount > 0, "no shares!");
         user.pending = 0;
         user.rewardPaid = user.shares.mul(accPerShare).div(1e12);
 
@@ -538,6 +581,22 @@ contract PineconeFarm is OwnableUpgradeable, ReentrancyGuardUpgradeable, IPineco
 
     function claimDeadDustBNB(address _to) public onlyDev {
         _claimBNB(DEAD, _to);
+    }
+
+    function claimBNB2() public nonReentrant onlyEOAOrAuthContract {
+        _claimBNB2(msg.sender);
+    }
+
+    function _claimBNB2(address _user) private returns(uint256) {
+        PoolInfo storage pool = poolInfo[pctStakingPid];
+        uint256 bnbAmt = IVaultPCT(pool.strat).claimBNB(_user);
+        if (bnbAmt > 0) {
+            PoolInfo storage cakePool = poolInfo[cakeRewardsStakingNewPid];
+            bnbAmt = IPineconeStrategy(cakePool.strat).claimBNB(bnbAmt, _user);
+            emit ClaimBNB(_user, bnbAmt);
+        }
+
+        return bnbAmt;
     }
 
     // Safe PCT transfer function, just in case if rounding error causes pool to not have enough
@@ -588,7 +647,7 @@ contract PineconeFarm is OwnableUpgradeable, ReentrancyGuardUpgradeable, IPineco
             _to = teamRewardsAddress;
         }
 
-        uint256 _pid = cakeRewardsStakingPid;
+        uint256 _pid = cakeRewardsStakingNewPid > 0 ? cakeRewardsStakingNewPid : cakeRewardsStakingPid;
         PoolInfo storage pool = poolInfo[_pid];
         pool.want.safeTransferFrom(
             address(msg.sender),
@@ -598,7 +657,11 @@ contract PineconeFarm is OwnableUpgradeable, ReentrancyGuardUpgradeable, IPineco
 
         pool.want.safeIncreaseAllowance(pool.strat, _amount);
         IPineconeStrategy(pool.strat).deposit(_amount, _to);
-        _upateCakeRewards(_amount);
+        if (cakeRewardsStakingNewPid > 0) {
+            _upateCakeRewards2(_amount);
+        } else {
+            _upateCakeRewards(_amount);
+        }
     }
 
     function pctDailyReward() public view returns(uint256) {
@@ -684,6 +747,12 @@ contract PineconeFarm is OwnableUpgradeable, ReentrancyGuardUpgradeable, IPineco
         cakeTokenReward.accPerShare = cakeTokenReward.accPerShare.add(_amount.mul(1e12).div(totalSupply));
     }
 
+    function _upateCakeRewards2(uint256 _amount) private {
+        uint256 _pid = pctStakingPid;
+        PoolInfo storage pool = poolInfo[_pid];
+        IVaultPCT(pool.strat).updateCakeRewards(_amount);
+    }
+
     function mintForPresale(address _to, uint256 _amount) public onlyMinter returns(uint256) {
         require(_amount > 0, "_amount == 0");
 
@@ -708,7 +777,12 @@ contract PineconeFarm is OwnableUpgradeable, ReentrancyGuardUpgradeable, IPineco
     }
 
     function _adjustCakeRewardTo(address _user) private {
-        if (_user == address(0) || _user == address(this)) return;
+        if (_user == address(0) || 
+            _user == address(this) ||
+            _user == address(0x000000000000000000000000000000000000dEaD)
+           )
+            return;
+            
         if (isContract(_user)) return;
 
         if (cakeTokenReward.accPerShare == 0) return;
@@ -743,7 +817,7 @@ contract PineconeFarm is OwnableUpgradeable, ReentrancyGuardUpgradeable, IPineco
         (uint256 wantAmt,,) = IPineconeStrategy(fromPool.strat).withdrawAll(address(this));
         _safeApprove(address(toPool.want), toPool.strat);
         IPineconeStrategy(toPool.strat).deposit(wantAmt, address(this));
-        cakeRewardsStakingPid = toId;
+        cakeRewardsStakingNewPid = toId;
     }
 
     function _safeApprove(address token, address spender) internal {

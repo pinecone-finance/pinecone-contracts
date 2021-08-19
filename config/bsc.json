@@ -1,4 +1,6 @@
 {
+	"ProxyAdmin": "0xdA700bb0969EB13679E7B359Cf4039582B771469",
+	"PCTClaim": "0x8e106537D4Ee1E446e231E287a914fD6AB858c1a",
 	"PineconeFarmTimelock": {
 		"contractName": "PineconeFarmTimelock",
 		"address": "0x44c81c726a26f060AB683774404c47bc70De7C26"
@@ -15,6 +17,10 @@
 		"contractName": "WexCalculator",
 		"address": "0x1A2e1FC8E259786A0Da3E7E18Fd9C3F4dee5fFE9"
 	},
+	"BSWCalculator": {
+		"contractName": "BSWCalculator",
+		"address": "0x3512cDF2ee3cCc8dcC90bBE3067Bc677D4357aCD"
+	},
 	"BSCDashboard": {
 		"contractName": "BSCDashboard",
 		"address": "0x79EB2F9bAfDb463ACe6E3FB2643bba4c52D979e4"
@@ -27,10 +33,6 @@
 		"contractName": "WNativeRelayer",
 		"address": "0xdCBd8c36FE9542DbadD347d6170d3FD415C5aef5"
 	},
-	"PresaleToken": {
-		"contractName": "PresaleToken",
-		"address": "0x9193E975464602f4f2415b9e921b0E8820a4654F"
-	},
 	"RabbitCalculator": {
 		"contractName": "RabbitCalculator",
 		"address": "0x8e9aec3C5025559b929637b0dcfA018D494aD059"
@@ -41,32 +43,60 @@
 	},
 	"PineconeToken": {
 		"contractName": "PineconeToken",
-		"address": "0x8F72ae0B486c6159011b4B9515B7806fC312DBeF",
+		"address": "0x4631d9D8b34f51B82958a19453bdc9eA0C4E49FC",
 		"name": "Pinecone Token",
 		"symbol": "PCT",
 		"decimals": "18"
 	},
 	"PCTLPToken": {
 		"contractName": "PCTLPToken",
-		"address": "0x5800E928079528E25E98b45A434cD30B118Afc6b",
+		"address": "0x7e19234B088CDc2D7EDB8e797467c1b722F18F62",
 		"name": "Pancake LPs",
 		"symbol": "Cake-LP",
 		"decimals": "18"
 	},
 	"PineconeFarm": {
 		"contractName": "PineconeFarm",
-		"address": "0x462E7cC60950138F65Ea00FA7408DD44264274A3"
+		"address": "0x6D61bF5CaBb9BDB88DB1C6d149C2aDcFaDc0892E"
 	},
 	"PineconeStrat": [
 		{
+			"name": "PCT",
+			"type": "pct",
+			"pctAllocPoint": "1000",
+			"autoCompound": "0",
+			"withdrawFee": "0.005",
+			"stakingToken": {
+				"name": "Pinecone Token",
+				"symbol": "PCT",
+				"decimals": "18",
+				"address": "0x4631d9D8b34f51B82958a19453bdc9eA0C4E49FC"
+			},
+			"earnedToken0": {
+				"name": "BNB",
+				"symbol": "BNB",
+				"decimals": "18",
+				"address": "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c"
+			},
+			"earnedToken1": {
+				"name": "Pinecone Token",
+				"symbol": "PCT",
+				"decimals": "18",
+				"address": "0x4631d9D8b34f51B82958a19453bdc9eA0C4E49FC"
+			},
+			"contractName": "VaultPCT",
+			"pineconeStrat": "0x4EcEae94738B6Ac5f9918a37aB94d045F798e206",
+			"pineconePid": "12"
+		},
+		{
 			"name": "CAKE",
-			"type": "cake-mdex",
-			"pctAllocPoint": "100",
+			"type": "cake-bsw",
+			"pctAllocPoint": "0",
 			"autoCompound": "365",
 			"cakePid": "0",
-			"withdrawFee": "0",
+			"withdrawFee": "0.005",
 			"cakeStrat": "0x73feaa1eE314F8c655E354234017bE2193C9E24E",
-			"mdexStrat": "0x6aEE12e5Eb987B3bE1BA8e621BE7C4804925bA68",
+			"bswStrat": "0xDbc1A13490deeF9c3C12b44FE77b503c1B061739",
 			"stakingToken": {
 				"name": "PancakeSwap Token",
 				"symbol": "Cake",
@@ -83,20 +113,51 @@
 				"name": "Pinecone Token",
 				"symbol": "PCT",
 				"decimals": "18",
-				"address": "0x9113677aF9E73E77DACdbB4a2C04E729EBe44BEA"
+				"address": "0x4631d9D8b34f51B82958a19453bdc9eA0C4E49FC"
 			},
-			"contractName": "VaultCakeMdex",
-			"pineconeStrat": "0x013b65FBF141D7DF711cB594cfcaC16C7D4c6713",
+			"contractName": "VaultCakeBSW",
+			"pineconeStrat": "0xd3ba9E7BE903A8B70A6afBd6AEbD2Bc8B46Ba114",
 			"pineconePid": "0"
 		},
 		{
-			"name": "BUSD",
-			"type": "rabbit-mdex",
-			"pctAllocPoint": "100",
+			"name": "ALPACA",
+			"type": "alpaca-bsw",
+			"pctAllocPoint": "0",
 			"autoCompound": "365",
-			"withdrawFee": "0",
+			"withdrawFee": "0.005",
+			"alpacaStrat": "0xf1bE8ecC990cBcb90e166b71E368299f0116d421",
+			"bswStrat": "0xDbc1A13490deeF9c3C12b44FE77b503c1B061739",
+			"alpacaPid": "11",
+			"stakingToken": {
+				"name": "Alpaca Token",
+				"symbol": "ALPACA",
+				"decimals": "18",
+				"address": "0x8F0528cE5eF7B51152A59745bEfDD91D97091d2F"
+			},
+			"earnedToken0": {
+				"name": "Alpaca Token",
+				"symbol": "ALPACA",
+				"decimals": "18",
+				"address": "0x8F0528cE5eF7B51152A59745bEfDD91D97091d2F"
+			},
+			"earnedToken1": {
+				"name": "Pinecone Token",
+				"symbol": "PCT",
+				"decimals": "18",
+				"address": "0x4631d9D8b34f51B82958a19453bdc9eA0C4E49FC"
+			},
+			"contractName": "VaultAlpacaBSW",
+			"pineconeStrat": "0x3fa689349f46904bBB0Cc2b7f2abB23bb28Cb8e2",
+			"pineconePid": "7"
+		},
+		{
+			"name": "BUSD",
+			"type": "rabbit-cake",
+			"pctAllocPoint": "0",
+			"autoCompound": "365",
+			"withdrawFee": "0.005",
 			"rabbitStrat": "0xc18907269640D11E2A91D7204f33C5115Ce3419e",
-			"mdexStrat": "0x6aEE12e5Eb987B3bE1BA8e621BE7C4804925bA68",
+			"cakeStrat": "0x73feaa1eE314F8c655E354234017bE2193C9E24E",
 			"rabbitPid": "1",
 			"stakingToken": {
 				"name": "BUSD Token",
@@ -114,20 +175,51 @@
 				"name": "Pinecone Token",
 				"symbol": "PCT",
 				"decimals": "18",
-				"address": "0x796b9C784Af737EBC03175FAADc525922c97F112"
+				"address": "0x4631d9D8b34f51B82958a19453bdc9eA0C4E49FC"
 			},
-			"contractName": "VaultRabbitMdex",
-			"pineconeStrat": "0x67d3fE0ac28C8E558C3be2428f8F1A6659a66be3",
+			"contractName": "VaultRabbitCake",
+			"pineconeStrat": "0x9969C1bDC89050a7ED1a62F5a271cF648c6E0315",
 			"pineconePid": "1"
 		},
 		{
-			"name": "USDT",
-			"type": "rabbit-mdex",
-			"pctAllocPoint": "100",
+			"name": "BUSD",
+			"type": "alpaca-bsw",
+			"pctAllocPoint": "0",
 			"autoCompound": "365",
-			"withdrawFee": "0",
+			"withdrawFee": "0.005",
+			"alpacaStrat": "0x7C9e73d4C71dae564d41F78d56439bB4ba87592f",
+			"bswStrat": "0xDbc1A13490deeF9c3C12b44FE77b503c1B061739",
+			"alpacaPid": "3",
+			"stakingToken": {
+				"name": "BUSD Token",
+				"symbol": "BUSD",
+				"decimals": "18",
+				"address": "0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56"
+			},
+			"earnedToken0": {
+				"name": "BUSD Token",
+				"symbol": "BUSD",
+				"decimals": "18",
+				"address": "0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56"
+			},
+			"earnedToken1": {
+				"name": "Pinecone Token",
+				"symbol": "PCT",
+				"decimals": "18",
+				"address": "0x4631d9D8b34f51B82958a19453bdc9eA0C4E49FC"
+			},
+			"contractName": "VaultAlpacaBSW",
+			"pineconeStrat": "0x577182D1af971a3c0671d155B4eA4b11bC9fF1d3",
+			"pineconePid": "10"
+		},
+		{
+			"name": "USDT",
+			"type": "rabbit-cake",
+			"pctAllocPoint": "0",
+			"autoCompound": "365",
+			"withdrawFee": "0.005",
 			"rabbitStrat": "0xc18907269640D11E2A91D7204f33C5115Ce3419e",
-			"mdexStrat": "0x6aEE12e5Eb987B3bE1BA8e621BE7C4804925bA68",
+			"cakeStrat": "0x73feaa1eE314F8c655E354234017bE2193C9E24E",
 			"rabbitPid": "2",
 			"stakingToken": {
 				"name": "Tether USD",
@@ -145,20 +237,51 @@
 				"name": "Pinecone Token",
 				"symbol": "PCT",
 				"decimals": "18",
-				"address": "0x796b9C784Af737EBC03175FAADc525922c97F112"
+				"address": "0x4631d9D8b34f51B82958a19453bdc9eA0C4E49FC"
 			},
-			"contractName": "VaultRabbitMdex",
-			"pineconeStrat": "0x47b411931C19aAe4E8b67D8D26A88a53568FA77A",
+			"contractName": "VaultRabbitCake",
+			"pineconeStrat": "0x28b8c2A5b3Af767D976c0cb3cFbC1738C5cE7bF9",
 			"pineconePid": "2"
 		},
 		{
-			"name": "BNB",
-			"type": "rabbit-mdex",
-			"pctAllocPoint": "100",
+			"name": "USDT",
+			"type": "alpaca-bsw",
+			"pctAllocPoint": "0",
 			"autoCompound": "365",
-			"withdrawFee": "0",
+			"withdrawFee": "0.005",
+			"alpacaStrat": "0x158Da805682BdC8ee32d52833aD41E74bb951E59",
+			"bswStrat": "0xDbc1A13490deeF9c3C12b44FE77b503c1B061739",
+			"alpacaPid": "16",
+			"stakingToken": {
+				"name": "Tether USD",
+				"symbol": "USDT",
+				"decimals": "18",
+				"address": "0x55d398326f99059fF775485246999027B3197955"
+			},
+			"earnedToken0": {
+				"name": "Tether USD",
+				"symbol": "USDT",
+				"decimals": "18",
+				"address": "0x55d398326f99059fF775485246999027B3197955"
+			},
+			"earnedToken1": {
+				"name": "Pinecone Token",
+				"symbol": "PCT",
+				"decimals": "18",
+				"address": "0x4631d9D8b34f51B82958a19453bdc9eA0C4E49FC"
+			},
+			"contractName": "VaultAlpacaBSW",
+			"pineconeStrat": "0xB4f3614cd8DB81bf1c8a026C3f382Ce7324ab76E",
+			"pineconePid": "11"
+		},
+		{
+			"name": "BNB",
+			"type": "rabbit-cake",
+			"pctAllocPoint": "0",
+			"autoCompound": "365",
+			"withdrawFee": "0.005",
 			"rabbitStrat": "0xc18907269640D11E2A91D7204f33C5115Ce3419e",
-			"mdexStrat": "0x6aEE12e5Eb987B3bE1BA8e621BE7C4804925bA68",
+			"cakeStrat": "0x73feaa1eE314F8c655E354234017bE2193C9E24E",
 			"rabbitPid": "0",
 			"stakingToken": {
 				"name": "BNB",
@@ -176,20 +299,51 @@
 				"name": "Pinecone Token",
 				"symbol": "PCT",
 				"decimals": "18",
-				"address": "0x796b9C784Af737EBC03175FAADc525922c97F112"
+				"address": "0x4631d9D8b34f51B82958a19453bdc9eA0C4E49FC"
 			},
-			"contractName": "VaultRabbitMdex",
-			"pineconeStrat": "0xdb0355DDf0EC2a193e3AF980F98Ebed3cAdF3f36",
+			"contractName": "VaultRabbitCake",
+			"pineconeStrat": "0x5B69255D11fBBf3aEb9b407e2F2B7FC85461C157",
 			"pineconePid": "3"
 		},
 		{
-			"name": "BTCB",
-			"type": "rabbit-mdex",
-			"pctAllocPoint": "100",
+			"name": "BNB",
+			"type": "alpaca-bsw",
+			"pctAllocPoint": "0",
 			"autoCompound": "365",
-			"withdrawFee": "0",
+			"withdrawFee": "0.005",
+			"alpacaStrat": "0xd7D069493685A581d27824Fc46EdA46B7EfC0063",
+			"bswStrat": "0xDbc1A13490deeF9c3C12b44FE77b503c1B061739",
+			"alpacaPid": "1",
+			"stakingToken": {
+				"name": "BNB",
+				"symbol": "BNB",
+				"decimals": "18",
+				"address": "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c"
+			},
+			"earnedToken0": {
+				"name": "BNB",
+				"symbol": "BNB",
+				"decimals": "18",
+				"address": "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c"
+			},
+			"earnedToken1": {
+				"name": "Pinecone Token",
+				"symbol": "PCT",
+				"decimals": "18",
+				"address": "0x4631d9D8b34f51B82958a19453bdc9eA0C4E49FC"
+			},
+			"contractName": "VaultAlpacaBSW",
+			"pineconeStrat": "0x81778E52eD273bd98c1342FEe2D2FC2b37e53d3d",
+			"pineconePid": "9"
+		},
+		{
+			"name": "BTCB",
+			"type": "rabbit-cake",
+			"pctAllocPoint": "0",
+			"autoCompound": "365",
+			"withdrawFee": "0.005",
 			"rabbitStrat": "0xc18907269640D11E2A91D7204f33C5115Ce3419e",
-			"mdexStrat": "0x6aEE12e5Eb987B3bE1BA8e621BE7C4804925bA68",
+			"cakeStrat": "0x73feaa1eE314F8c655E354234017bE2193C9E24E",
 			"rabbitPid": "3",
 			"stakingToken": {
 				"name": "BTCB Token",
@@ -207,20 +361,20 @@
 				"name": "Pinecone Token",
 				"symbol": "PCT",
 				"decimals": "18",
-				"address": "0x796b9C784Af737EBC03175FAADc525922c97F112"
+				"address": "0x4631d9D8b34f51B82958a19453bdc9eA0C4E49FC"
 			},
-			"contractName": "VaultRabbitMdex",
-			"pineconeStrat": "0x65A17a7052D2A49077fe196722A8E5a5497fDe7A",
+			"contractName": "VaultRabbitCake",
+			"pineconeStrat": "0xACB6196c795DAAE39B04a0AE49fc87c11708f926",
 			"pineconePid": "4"
 		},
 		{
 			"name": "ETH",
-			"type": "rabbit-mdex",
-			"pctAllocPoint": "100",
+			"type": "rabbit-cake",
+			"pctAllocPoint": "0",
 			"autoCompound": "365",
-			"withdrawFee": "0",
+			"withdrawFee": "0.005",
 			"rabbitStrat": "0xc18907269640D11E2A91D7204f33C5115Ce3419e",
-			"mdexStrat": "0x6aEE12e5Eb987B3bE1BA8e621BE7C4804925bA68",
+			"cakeStrat": "0x73feaa1eE314F8c655E354234017bE2193C9E24E",
 			"rabbitPid": "4",
 			"stakingToken": {
 				"name": "Ethereum Token",
@@ -238,19 +392,19 @@
 				"name": "Pinecone Token",
 				"symbol": "PCT",
 				"decimals": "18",
-				"address": "0x796b9C784Af737EBC03175FAADc525922c97F112"
+				"address": "0x4631d9D8b34f51B82958a19453bdc9eA0C4E49FC"
 			},
-			"contractName": "VaultRabbitMdex",
-			"pineconeStrat": "0xFadfb481a2b9E9ce11fAC5C4F2af4fa778BaBcbf",
+			"contractName": "VaultRabbitCake",
+			"pineconeStrat": "0x8860E60A35D59b385DFde620C949891984525f5F",
 			"pineconePid": "5"
 		},
 		{
-			"name": "RewardCAKE-MDEX",
+			"name": "RewardCAKEBSW",
 			"type": "hide",
 			"pctAllocPoint": "0",
 			"autoCompound": "365",
 			"cakeStrat": "0x73feaa1eE314F8c655E354234017bE2193C9E24E",
-			"mdexStrat": "0x6aEE12e5Eb987B3bE1BA8e621BE7C4804925bA68",
+			"bswStrat": "0xDbc1A13490deeF9c3C12b44FE77b503c1B061739",
 			"stakingToken": {
 				"name": "PancakeSwap Token",
 				"symbol": "Cake",
@@ -269,12 +423,51 @@
 				"decimals": "",
 				"address": "0x0000000000000000000000000000000000000000"
 			},
-			"contractName": "VaultRewardsCakeMdex",
-			"pineconeStrat": "0x3744DB91445d14362ecF36C360dc647ca5362d1b",
-			"pineconePid": "6"
+			"contractName": "VaultRewardsCakeBSW",
+			"pineconeStrat": "0x602819d6598C6840f80AEEbAef20985b082B0958",
+			"pineconePid": "8"
+		},
+		{
+			"name": "RewardCAKEBSWNew",
+			"type": "hide",
+			"pctAllocPoint": "0",
+			"autoCompound": "365",
+			"cakeStrat": "0x73feaa1eE314F8c655E354234017bE2193C9E24E",
+			"bswStrat": "0xDbc1A13490deeF9c3C12b44FE77b503c1B061739",
+			"stakingToken": {
+				"name": "PancakeSwap Token",
+				"symbol": "Cake",
+				"decimals": "18",
+				"address": "0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82"
+			},
+			"earnedToken0": {
+				"name": "PancakeSwap Token",
+				"symbol": "Cake",
+				"decimals": "18",
+				"address": "0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82"
+			},
+			"earnedToken1": {
+				"name": "",
+				"symbol": "",
+				"decimals": "",
+				"address": "0x0000000000000000000000000000000000000000"
+			},
+			"contractName": "VaultRewardsCakeBSW",
+			"pineconeStrat": "0xd5D9CBf094a1F06fBb8b7Ee4B704b26024b40178",
+			"pineconePid": "13"
 		}
 	],
-	"cakeRewardsPid": "6",
-	"totalPctAllocPoint": "600",
-	"presaleId": "0"
+	"totalPctAllocPoint": "1000",
+	"SmartRouter": {
+		"contractName": "SmartRouter",
+		"address": "0x8733d267a82BE6d697E4A5dc7D26c93C2032A53d"
+	},
+	"PresaleToken": {
+		"contractName": "PresaleToken",
+		"address": "0x5a8e10bc97758437B5aDD5854c56E0BE1D663dF2"
+	},
+	"presaleId": "1",
+	"cakeRewardsPid": "8",
+	"pctStakingPid": "12",
+	"cakeRewardsNewPid": "13"
 }

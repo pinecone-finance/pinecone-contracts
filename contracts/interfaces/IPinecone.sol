@@ -4,13 +4,16 @@ pragma solidity 0.6.12;
 
 enum StakeType {
     None,
-    Alpaca_Wex,
-    Cake_Wex,
-    RewardsCake_Wex,
     PCTPair,
     Rabbit_Mdex,
     Cake_Mdex,
-    RewardsCake_Mdex
+    RewardsCake_Mdex,
+    Rabbit_Cake,
+    Cake_BSW,
+    RewardsCake_BSW,
+    Alpaca_BSW,
+    HotToken,
+    PCT
 }
 
 interface IPineconeFarm {
@@ -36,6 +39,7 @@ interface IPineconeFarm {
             uint256 withdrawbaleAmt
         ); 
     function claimBNB() external;
+    function setClaimCoolDown(uint256 _duration) external;
 }
 
 interface IPineconeStrategy {
@@ -72,10 +76,18 @@ interface IPineconeStrategy {
     function inCaseTokensGetStuck(address _token, uint256 _amount) external;
     function stakingToken() external view returns(address);
     function setWithdrawFeeFactor(uint256 _withdrawFeeFactor) external;
+    function pendingRewardsValue() external view returns(uint256 priceInUsd);
+    function pendingRewards(address _user) external view returns(uint256 wantAmt, uint256 pctAmt);
 }
 
 interface IOwner {
     function owner() external view returns (address);
+}
+
+interface IVaultPCT {
+    function updateCakeRewards(uint256 _amount) external; 
+    function cakeDailyReward() external view returns(uint256);
+    function claimBNB(address _user) external returns(uint256);
 }
 
 

@@ -73,6 +73,15 @@ contract PineconeConfig is OwnableUpgradeable {
         }
     }
 
+    function tokenAmountPctToMint(address _token, uint256 _profit, address _router) public view returns(uint256) {
+        if (_token == WBNB) {
+            return pineconeFarm.amountPctToMint(_profit);
+        } else {
+            uint256 bnbAmt = getAmountsOut(_profit, _token, WBNB, _router);
+            return pineconeFarm.amountPctToMint(bnbAmt);
+        }
+    }
+
     function getAmountsOut(uint256 amount, address token0, address token1, address router) public view returns (uint256) {
         if (amount == 0) {
             return 0;
