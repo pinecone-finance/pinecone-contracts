@@ -445,6 +445,7 @@ contract PineconeFarm is OwnableUpgradeable, ReentrancyGuardUpgradeable, IPineco
             require(_wantAmt == msg.value, "_wantAmt != msg.value");
             IWETH(WBNB).deposit{value: msg.value}();
         } else {
+            require(_wantAmt >= IERC20(pool.want).balanceOf(msg.sender), "invalid wantAmt");
             pool.want.safeTransferFrom(
                 address(msg.sender),
                 address(this),
