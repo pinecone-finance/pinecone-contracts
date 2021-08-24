@@ -195,6 +195,7 @@ contract VaultPCT is VaultBase, Strat{
         user.shares = user.shares.sub(_wantAmt);
         user.rewardPaid = user.shares.mul(cakeTokenReward.accPerShare).div(1e12);
 
+        uint256 sharesRemoved = _wantAmt;
         bool hasFee = (user.depositedAt.add(minDepositTimeWithNoFee) > block.timestamp) ? true : false;
         if (hasFee) {
             uint256 withdrawFeeAmt = _wantAmt.mul(withdrawFeeFactor).div(feeMax);
@@ -208,7 +209,7 @@ contract VaultPCT is VaultBase, Strat{
         }
 
         IERC20(stakingToken).safeTransfer(_user, _wantAmt);
-        return (_wantAmt, _wantAmt);
+        return (_wantAmt, sharesRemoved);
     }
 
     function claim(address _user) 
