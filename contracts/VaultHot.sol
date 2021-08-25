@@ -156,6 +156,7 @@ contract VaultHot is VaultBase {
             wantAmt = 0;
         }
         wantAmt = wantAmt.add(pendingAmt);
+        return wantAmt;
     }
 
     function pendingRewardsValue() public view returns(uint256 priceInUsd) {
