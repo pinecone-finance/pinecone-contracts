@@ -477,7 +477,7 @@ contract VaultHot is VaultBase {
     }
 
     function _farmStakingToken() internal {
-        uint256 amount = IERC20(stakingToken)).balanceOf(address(this));
+        uint256 amount = IERC20(stakingToken).balanceOf(address(this));
         if (amount > 0) {
             IMasterChef(stratAddress).enterStaking(amount);
         }
