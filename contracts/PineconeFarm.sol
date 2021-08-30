@@ -82,6 +82,10 @@ contract PineconeFarm is OwnableUpgradeable, ReentrancyGuardUpgradeable, IPineco
     uint256 public pctStakingPid;
     uint256 public cakeRewardsStakingNewPid;
 
+    //optimize gas fee
+    uint256 public balanceOfPct; 
+    uint256 public optimizeStartBlock;
+
     event Deposit(address indexed user, uint256 indexed pid, uint256 amount);
     event Withdraw(address indexed user, uint256 indexed pid, uint256 amount);
     event EmergencyWithdraw(
@@ -416,7 +420,12 @@ contract PineconeFarm is OwnableUpgradeable, ReentrancyGuardUpgradeable, IPineco
 
         uint256 PCTReward = multiplier.mul(PCTPerBlock).mul(pool.allocPCTPoint).div(totalPCTAllocPoint);
         
-        _mint(address(this), PCTReward);
+        //optimize gas fee
+        if (optimizeStartBlock == 0) {
+            optimizeStartBlock = block.number;
+            balanceOfPct = IERC20(pctAddress).balanceOf(address(this));
+        }
+        //_mint(address(this), PCTReward); 
 
         _mintForTeam(PCTReward);
 
@@ -604,13 +613,29 @@ contract PineconeFarm is OwnableUpgradeable, ReentrancyGuardUpgradeable, IPineco
     function _safePCTTransfer(address _to, uint256 _PCTAmt) private {
         if (_PCTAmt == 0) return;
 
-        uint256 PCTBal = IERC20(pctAddress).balanceOf(address(this));
-        if (PCTBal == 0) return;
+        if (optimizeStartBlock > 0) {
+            if (balanceOfPct > 0) {
+                if (_PCTAmt > balanceOfPct) {
+                    IERC20(pctAddress).safeTransfer(_to, balanceOfPct);
+                    uint256 mintAmt = _PCTAmt - balanceOfPct;
+                    balanceOfPct = 0;
+                    _mint(_to, mintAmt);
+                } else {
+                    balanceOfPct = balanceOfPct - _PCTAmt;
+                    IERC20(pctAddress).safeTransfer(_to, _PCTAmt);
+                }
+            } else {
+                _mint(_to, _PCTAmt);
+            }
+        } else {
+            uint256 PCTBal = IERC20(pctAddress).balanceOf(address(this));
+            if (PCTBal == 0) return;
         
-        if (_PCTAmt > PCTBal) {
-            _PCTAmt = PCTBal;
+            if (_PCTAmt > PCTBal) {
+                _PCTAmt = PCTBal;
+            }
+            IERC20(pctAddress).safeTransfer(_to, _PCTAmt);
         }
-        IERC20(pctAddress).safeTransfer(_to, _PCTAmt);
     }
 
     function inCaseTokensGetStuck(address _token, uint256 _amount)
@@ -634,7 +659,10 @@ contract PineconeFarm is OwnableUpgradeable, ReentrancyGuardUpgradeable, IPineco
 
     function _mintForTeam(uint256 _amount) private {
         uint256 pctForTeam = _amount.mul(teamPCTReward).div(1000);
-        _mint(teamRewardsAddress, pctForTeam);
+        //optimize gas fee
+        //_mint(teamRewardsAddress, pctForTeam);
+        UserInfo storage user = userInfo[pctStakingPid][teamRewardsAddress];
+        user.pending = user.pending.add(pctForTeam);
     }
 
     function stakeRewardsTo(address _to, uint256 _amount) public onlyMinter {
