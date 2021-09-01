@@ -212,9 +212,11 @@ contract VaultCakeBSW is VaultBase, BSWStrat{
         earnedWantAmt = earnedWantAmt.sub(fee);
         wantAmt = wantAmt.add(earnedWantAmt);
 
-        earnedWantAmt = IERC20(CAKE).balanceOf(address(this));
-        if (wantAmt > earnedWantAmt) {
-            wantAmt = earnedWantAmt;
+        {
+            uint256 balanceAmt = IERC20(CAKE).balanceOf(address(this));
+            if (wantAmt > balanceAmt) {
+                wantAmt = balanceAmt;
+            }
         }
 
         _safeTransfer(CAKE, _user, wantAmt, address(0));

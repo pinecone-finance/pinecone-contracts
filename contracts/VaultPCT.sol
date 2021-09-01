@@ -147,6 +147,8 @@ contract VaultPCT is VaultBase, Strat{
         UserAssetInfo storage user = users[_user];
         require(user.depositAmt > 0, "depositAmt <= 0");
 
+        (uint256 bnbAmt,) = pendingRewards(_user);
+
         uint256 _wantAmt = user.depositAmt;
         sharesTotal = sharesTotal.sub(_wantAmt);
 
@@ -163,8 +165,6 @@ contract VaultPCT is VaultBase, Strat{
         }
 
         IERC20(stakingToken).safeTransfer(_user, _wantAmt);
-
-        (uint256 bnbAmt,) = pendingRewards(_user);
 
         user.depositAmt = 0;
         user.depositedAt = 0;

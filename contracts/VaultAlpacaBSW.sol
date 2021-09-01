@@ -81,11 +81,11 @@ contract VaultAlpacaBSW is VaultBase, BSWStratV2{
 
     function tvl() public view returns(uint256 priceInUsd) {
         (uint256 wantAmt, uint256 alpacaAmt, uint256 bswAmt) = balance();
-        wantAmt = wantAmt.add(alpacaAmt);
         IPineconeConfig _config = config;
         uint256 wantTvl = wantAmt.mul(_config.priceOfToken(stakingToken)).div(UNIT);
+        uint256 alpacaTvl = alpacaAmt.mul(_config.priceOfToken(ALPACA)).div(UNIT);
         uint256 bswTvl = bswAmt.mul(_config.priceOfToken(BSW)).div(UNIT);
-        return wantTvl.add(bswTvl);
+        return wantTvl.add(bswTvl).add(alpacaTvl);
     }
 
     function balance() public view returns(uint256 wantAmt, uint256 alpacaAmt, uint256 bswAmt) {
@@ -208,11 +208,11 @@ contract VaultAlpacaBSW is VaultBase, BSWStratV2{
         nonReentrant
         returns (uint256, uint256, uint256)
     {
-        require(sharesTotal > 0, "sharesTotal is 0");
+        require(sharesTotal > 0, "s 0");
 
         UserAssetInfo storage user = users[_user];
-        require(user.shares > 0, "user.shares is 0");
-        require(user.depositAmt > 0, "depositAmt <= 0");
+        require(user.shares > 0, "us 0");
+        require(user.depositAmt > 0, "d 0");
 
         uint256 wantAmt = user.depositAmt;
         (uint256 earnedWantAmt, uint256 bswAmt) = earnedOf(_user);
@@ -269,12 +269,12 @@ contract VaultAlpacaBSW is VaultBase, BSWStratV2{
         nonReentrant
         returns (uint256, uint256)
     {
-        require(_wantAmt > 0, "_wantAmt <= 0");
-        require(sharesTotal > 0, "sharesTotal is 0");
+        require(_wantAmt > 0, "w 0");
+        require(sharesTotal > 0, "s 0");
 
         UserAssetInfo storage user = users[_user];
-        require(user.shares > 0, "user.shares is 0");
-        require(user.depositAmt > 0, "depositAmt <= 0");
+        require(user.shares > 0, "us 0");
+        require(user.depositAmt > 0, "d 0");
 
         (uint256 wantAmt, uint256 sharesRemoved) = _withdraw(_wantAmt, _user);
         _earn();
@@ -304,10 +304,7 @@ contract VaultAlpacaBSW is VaultBase, BSWStratV2{
         public
         onlyGov
     {
-        require(_token != config.PCT(), "!safe");
-        require(_token != stakingToken, "!safe");
-        require(_token != ALPACA, "!safe");
-        require(_token != BSW, "!safe");
+        require(_token != config.PCT() && _token != stakingToken &&  _token != ALPACA && _token != BSW, "!safe");
         IERC20(_token).safeTransfer(msg.sender, _amount);
     }
 
@@ -452,7 +449,7 @@ contract VaultAlpacaBSW is VaultBase, BSWStratV2{
         fee = performanceFee(_wantAmt);
         if (fee > 0) {
             IPineconeFarm pineconeFarm = config.pineconeFarm();
-            uint256 profit = ISmartRouter(smartRouter).getAmountOut(fee, stakingToken, WBNB, CAKE_ROUTER);
+            uint256 profit = config.valueInBNB(stakingToken, fee);
             pct = pineconeFarm.mintForProfit(_user, profit, false);
 
             uint256 cakeAmt = _swap(CAKE, fee, ISmartRouter(smartRouter).tokenPath(stakingToken, CAKE), CAKE_ROUTER);

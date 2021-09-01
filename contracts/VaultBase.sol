@@ -43,12 +43,12 @@ contract VaultBase is OwnableUpgradeable, ReentrancyGuardUpgradeable, PausableUp
     }
 
     modifier onlyGov() {
-        require(msg.sender == govAddress, "!gov");
+        require(msg.sender == govAddress, "!g");
         _;
     }
 
     modifier onlyDev() {
-        require(msg.sender == devAddress, "!dev");
+        require(msg.sender == devAddress, "!d");
         _;
     }
 
@@ -66,7 +66,7 @@ contract VaultBase is OwnableUpgradeable, ReentrancyGuardUpgradeable, PausableUp
     }
 
     function setCommission(uint256 _commission) onlyDev public {
-        require(_commission <= commissionUL, "too high");
+        require(_commission <= commissionUL, "th");
         commission = _commission;
     }
 
@@ -80,7 +80,7 @@ contract VaultBase is OwnableUpgradeable, ReentrancyGuardUpgradeable, PausableUp
     }
 
     function setWithdrawFeeFactor(uint256 _withdrawFeeFactor) onlyGov public {
-        require(_withdrawFeeFactor <= withdrawFeeFactorUL, "too high");
+        require(_withdrawFeeFactor <= withdrawFeeFactorUL, "th");
         withdrawFeeFactor = _withdrawFeeFactor;
     }
 

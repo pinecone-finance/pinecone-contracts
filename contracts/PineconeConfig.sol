@@ -4,7 +4,6 @@ pragma solidity 0.6.12;
 import "./helpers/Ownable.sol";
 import "./interfaces/IPinecone.sol";
 import "./interfaces/IDashboard.sol";
-import "./WNativeRelayer.sol";
 import "./interfaces/IPancakeRouter02.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 
@@ -70,6 +69,15 @@ contract PineconeConfig is OwnableUpgradeable {
         } else {
             uint256 bnbAmt = priceCalculator.getAmountsOut(_profit, _tokenPath(_token, WBNB));
             return pineconeFarm.amountPctToMint(bnbAmt);
+        }
+    }
+
+    function valueInBNB(address _token, uint256 _profit) public view returns(uint256) {
+        if (_token == WBNB) {
+            return _profit;
+        } else {
+            (uint256 bnbAmt, ) = priceCalculator.valueOfAsset(_token, _profit);
+            return bnbAmt;
         }
     }
 

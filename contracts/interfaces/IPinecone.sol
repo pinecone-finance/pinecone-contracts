@@ -40,6 +40,7 @@ interface IPineconeFarm {
         ); 
     function claimBNB() external;
     function setClaimCoolDown(uint256 _duration) external;
+    function setCalDuration(uint256 _duration) external;
 }
 
 interface IPineconeStrategy {
