@@ -72,11 +72,11 @@ contract PineconeConfig is OwnableUpgradeable {
         }
     }
 
-    function valueInBNB(address _token, uint256 _profit) public view returns(uint256) {
+    function valueInBNB(address _token, uint256 _amount) public view returns(uint256) {
         if (_token == WBNB) {
-            return _profit;
+            return _amount;
         } else {
-            (uint256 bnbAmt, ) = priceCalculator.valueOfAsset(_token, _profit);
+            (uint256 bnbAmt, ) = priceCalculator.valueOfAsset(_token, _amount);
             return bnbAmt;
         }
     }

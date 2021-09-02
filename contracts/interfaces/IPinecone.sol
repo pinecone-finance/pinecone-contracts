@@ -13,7 +13,8 @@ enum StakeType {
     RewardsCake_BSW,
     Alpaca_BSW,
     HotToken,
-    PCT
+    PCT,
+    RewardsPCT
 }
 
 interface IPineconeFarm {

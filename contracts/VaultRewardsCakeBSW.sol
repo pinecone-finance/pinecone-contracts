@@ -202,14 +202,6 @@ contract VaultRewardsCakeBSW is VaultBase, BSWStrat{
         uint256 swapAmt = _swap(CAKE, bswAmt, _tokenPath(BSW, CAKE), ROUTER);
         wantAmt = wantAmt.add(swapAmt);
 
-        /*uint256 earnedCakeAmt = cakeAmt.add(swapAmt);
-        if (earnedCakeAmt > dust) {
-            IPineconeConfig _config = config;
-            IPineconeFarm pineconeFarm = _config.pineconeFarm();
-            uint256 profit = _config.getAmountsOut(earnedCakeAmt, CAKE, WBNB, CAKE_ROUTER);
-            pineconeFarm.mintForProfit(address(pineconeFarm), profit, true);
-        }*/
-
         uint256 balanceAmt = IERC20(CAKE).balanceOf(address(this));
         if (wantAmt > balanceAmt) {
             wantAmt = balanceAmt;
@@ -250,9 +242,13 @@ contract VaultRewardsCakeBSW is VaultBase, BSWStrat{
         _withdrawCake(wantAmt);
         _withdrawBSW(bswAmt);
 
-        _swap(CAKE, bswAmt, _tokenPath(BSW, CAKE), ROUTER);
+        _swap(WBNB, bswAmt, _tokenPath(BSW, WBNB), ROUTER);
+
         uint256 balanceAmt = IERC20(CAKE).balanceOf(address(this));
-        IERC20(CAKE).safeTransfer(msg.sender, balanceAmt);
+        _swap(WBNB, balanceAmt, _tokenPath(CAKE, WBNB), ROUTER);
+
+        balanceAmt = IERC20(WBNB).balanceOf(address(this));
+        IERC20(WBNB).safeTransfer(msg.sender, balanceAmt);
         sharesTotal = 0;
         return (balanceAmt, 0, 0);
     }

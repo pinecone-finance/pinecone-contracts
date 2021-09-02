@@ -235,11 +235,10 @@ contract PineconeFarm is OwnableUpgradeable, ReentrancyGuardUpgradeable, IPineco
         address _strat
     ) public onlyOwner returns (uint256)
     {
+        _withUpdate;
         checkPoolDuplicate(_strat);
 
-        if (_withUpdate) {
-            massUpdatePools();
-        }
+        massUpdatePools();
         uint256 lastRewardBlock = block.number;
         totalPCTAllocPoint = totalPCTAllocPoint.add(_allocPCTPoint);
 
@@ -622,14 +621,15 @@ contract PineconeFarm is OwnableUpgradeable, ReentrancyGuardUpgradeable, IPineco
         if (_PCTAmt == 0) return;
 
         if (optimizeStartBlock > 0) {
-            if (balanceOfPct > 0) {
-                if (_PCTAmt > balanceOfPct) {
-                    IERC20(pctAddress).safeTransfer(_to, balanceOfPct);
-                    uint256 mintAmt = _PCTAmt - balanceOfPct;
+            uint256 temp = balanceOfPct;
+            if (temp > 0) {
+                if (_PCTAmt > temp) {
+                    IERC20(pctAddress).safeTransfer(_to, temp);
+                    uint256 mintAmt = _PCTAmt - temp;
                     balanceOfPct = 0;
                     _mint(_to, mintAmt);
                 } else {
-                    balanceOfPct = balanceOfPct - _PCTAmt;
+                    balanceOfPct = temp - _PCTAmt;
                     IERC20(pctAddress).safeTransfer(_to, _PCTAmt);
                 }
             } else {
@@ -848,13 +848,18 @@ contract PineconeFarm is OwnableUpgradeable, ReentrancyGuardUpgradeable, IPineco
         return size > 0;
     }
 
-    function migrateCakeRewardsPool(uint256 fromId, uint toId) public onlyDev {
+    function migrateCakeRewardsPool(uint256 fromId, uint toId, bool newPool) public onlyDev {
         PoolInfo storage fromPool = poolInfo[fromId];
         PoolInfo storage toPool = poolInfo[toId];
         (uint256 wantAmt,,) = IPineconeStrategy(fromPool.strat).withdrawAll(address(this));
         _safeApprove(address(toPool.want), toPool.strat);
         IPineconeStrategy(toPool.strat).deposit(wantAmt, address(this));
-        cakeRewardsStakingNewPid = toId;
+        if (newPool) {
+            cakeRewardsStakingNewPid = toId;
+        } else {
+            cakeRewardsStakingPid = toId;
+        }
+        
     }
 
     function _safeApprove(address token, address spender) internal {

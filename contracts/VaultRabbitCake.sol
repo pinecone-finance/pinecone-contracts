@@ -252,7 +252,6 @@ contract VaultRabbitCake is VaultBase, CakeStrat{
         user.pending = 0;
         user.rewardPaid = 0;
     
-        _farm();
         return (wantAmt, earnedWantAmt, pctAmt);
     }
 
@@ -270,7 +269,6 @@ contract VaultRabbitCake is VaultBase, CakeStrat{
         require(user.depositAmt > 0, "depositAmt <= 0");
 
         (uint256 wantAmt, uint256 sharesRemoved) = _withdraw(_wantAmt, _user);
-        _farm();
         sharesTotal = sharesTotal.sub(sharesRemoved);
         uint256 pending = user.shares.mul(accPerShareOfCake).div(1e12).sub(user.rewardPaid);
         user.pending = user.pending.add(pending);
@@ -287,7 +285,6 @@ contract VaultRabbitCake is VaultBase, CakeStrat{
         returns(uint256, uint256)
     {
         (uint256 rewardAmt, uint256 pct) = _claim(_user);
-        _farm();
         UserAssetInfo storage user = users[_user];
         user.pending = 0;
         user.rewardPaid = user.shares.mul(accPerShareOfCake).div(1e12);
@@ -435,12 +432,17 @@ contract VaultRabbitCake is VaultBase, CakeStrat{
         fee = performanceFee(_wantAmt);
         if (fee > 0) {
             IPineconeFarm pineconeFarm = config.pineconeFarm();
-            uint256 profit = config.getAmountsOut(fee, stakingToken, WBNB, ROUTER);
+            _safeApprove(WBNB, address(pineconeFarm));
+            uint256 profit = config.valueInBNB(stakingToken, fee);
             pct = pineconeFarm.mintForProfit(_user, profit, false);
 
-            uint256 cakeAmt = _swap(CAKE, fee, _tokenPath(stakingToken, CAKE), ROUTER);
-            if (cakeAmt > 0) {
-                pineconeFarm.stakeRewardsTo(address(pineconeFarm), cakeAmt);
+            if (stakingToken == WBNB) {
+                pineconeFarm.stakeRewardsTo(address(pineconeFarm), fee);
+            } else {
+                uint256 bnbAmt = _swap(WBNB, fee, _tokenPath(stakingToken, WBNB), ROUTER);
+                if (bnbAmt > 0) {
+                    pineconeFarm.stakeRewardsTo(address(pineconeFarm), bnbAmt);
+                }
             }
         }
     }

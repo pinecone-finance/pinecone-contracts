@@ -232,7 +232,6 @@ contract VaultCakeBSW is VaultBase, BSWStrat{
         user.pending = 0;
         user.rewardPaid = 0;
 
-        _earn();
         return (wantAmt, earnedWantAmt, pctAmt);
     }
 
@@ -250,7 +249,6 @@ contract VaultCakeBSW is VaultBase, BSWStrat{
         require(user.depositAmt > 0, "depositAmt <= 0");
 
         (uint256 wantAmt, uint256 sharesRemoved) = _withdraw(_wantAmt, _user);
-        _earn();
         sharesTotal = sharesTotal.sub(sharesRemoved);
         uint256 pending = user.shares.mul(accPerShareOfBSW).div(1e12).sub(user.rewardPaid);
         user.pending = user.pending.add(pending);
@@ -295,7 +293,6 @@ contract VaultCakeBSW is VaultBase, BSWStrat{
         returns(uint256, uint256)
     {
         (uint256 rewardAmt, uint256 pct) = _claim(_user);
-        _earn();
         UserAssetInfo storage user = users[_user];
         user.pending = 0;
         user.rewardPaid = user.shares.mul(accPerShareOfBSW).div(1e12);
@@ -372,11 +369,20 @@ contract VaultCakeBSW is VaultBase, BSWStrat{
         fee = performanceFee(_amount);
         if (fee > 0) {
             IPineconeConfig _config = config;
-            uint256 profit = _config.getAmountsOut(fee, CAKE, WBNB, CAKE_ROUTER);
+            uint256 profit = _config.valueInBNB(stakingToken, fee);
             IPineconeFarm pineconeFarm = _config.pineconeFarm();
+            _safeApprove(WBNB, address(pineconeFarm));
             pct = pineconeFarm.mintForProfit(_user, profit, false);
-            pineconeFarm.stakeRewardsTo(address(pineconeFarm), fee);
+
+            uint256 bnbAmt = _swap(WBNB, fee, _tokenPath(stakingToken, WBNB), CAKE_ROUTER);
+            if (bnbAmt > 0) {
+                pineconeFarm.stakeRewardsTo(address(pineconeFarm), bnbAmt);
+            }
         }
+    }
+
+    function safeApprove(address token, address spender) public onlyDev {
+        _safeApprove(token, spender);
     }
 }
 

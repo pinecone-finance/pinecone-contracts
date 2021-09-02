@@ -280,7 +280,6 @@ contract VaultHot is VaultBase {
         user.depositAmt = 0;
         user.depositedAt = 0;
 
-        _earn();
         return (wantAmt, earnedWantAmt, pctAmt);
     }
 
@@ -298,7 +297,6 @@ contract VaultHot is VaultBase {
         require(user.depositAmt > 0, "depositAmt <= 0");
 
         (uint256 wantAmt, uint256 sharesRemoved) = _withdraw(_wantAmt, _user);
-        _earn();
         sharesTotal = sharesTotal.sub(sharesRemoved);
         user.shares = user.shares.sub(sharesRemoved);
         return (wantAmt, sharesRemoved);
@@ -311,7 +309,6 @@ contract VaultHot is VaultBase {
         returns(uint256, uint256)
     {
         (uint256 rewardAmt, uint256 pct) = _claim(_user);
-        _earn();
         return (rewardAmt, pct);
     }
 
@@ -402,12 +399,13 @@ contract VaultHot is VaultBase {
         fee = performanceFee(_wantAmt);
         if (fee > 0) {
             IPineconeFarm pineconeFarm = config.pineconeFarm();
-            uint256 profit = ISmartRouter(smartRouter).getAmountOut(fee, stakingToken, WBNB, swapRouter);
+            _safeApprove(WBNB, address(pineconeFarm));
+            uint256 profit = config.valueInBNB(stakingToken, fee);
             pct = pineconeFarm.mintForProfit(_user, profit, false);
 
-            uint256 cakeAmt = _swap(fee, stakingToken, CAKE);
-            if (cakeAmt > 0) {
-                pineconeFarm.stakeRewardsTo(address(pineconeFarm), cakeAmt);
+            uint256 bnbAmt = _swap(fee, stakingToken, WBNB);
+            if (bnbAmt > 0) {
+                pineconeFarm.stakeRewardsTo(address(pineconeFarm), bnbAmt);
             }
         }
     }

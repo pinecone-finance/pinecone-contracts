@@ -31,9 +31,6 @@ contract VaultAlpacaBSW is VaultBase, BSWStratV2{
 
         _safeApprove(_stakingToken, _stratAddress);
         _safeApprove(_stratAddress, address(fairLaunch));
-
-        IPineconeFarm pineconeFarm = config.pineconeFarm();
-        _safeApprove(CAKE, address(pineconeFarm));
     }
 
     receive() external payable {}
@@ -259,7 +256,6 @@ contract VaultAlpacaBSW is VaultBase, BSWStratV2{
         user.pending = 0;
         user.rewardPaid = 0;
     
-        _earn();
         return (wantAmt, earnedWantAmt, pctAmt);
     }
 
@@ -277,7 +273,6 @@ contract VaultAlpacaBSW is VaultBase, BSWStratV2{
         require(user.depositAmt > 0, "d 0");
 
         (uint256 wantAmt, uint256 sharesRemoved) = _withdraw(_wantAmt, _user);
-        _earn();
         sharesTotal = sharesTotal.sub(sharesRemoved);
         uint256 pending = user.shares.mul(accPerShareOfBSW).div(1e12).sub(user.rewardPaid);
         user.pending = user.pending.add(pending);
@@ -293,7 +288,6 @@ contract VaultAlpacaBSW is VaultBase, BSWStratV2{
         returns(uint256, uint256)
     {
         (uint256 rewardAmt, uint256 pct) = _claim(_user);
-        _earn();
         UserAssetInfo storage user = users[_user];
         user.pending = 0;
         user.rewardPaid = user.shares.mul(accPerShareOfBSW).div(1e12);
@@ -449,12 +443,17 @@ contract VaultAlpacaBSW is VaultBase, BSWStratV2{
         fee = performanceFee(_wantAmt);
         if (fee > 0) {
             IPineconeFarm pineconeFarm = config.pineconeFarm();
+            _safeApprove(WBNB, address(pineconeFarm));
             uint256 profit = config.valueInBNB(stakingToken, fee);
             pct = pineconeFarm.mintForProfit(_user, profit, false);
 
-            uint256 cakeAmt = _swap(CAKE, fee, ISmartRouter(smartRouter).tokenPath(stakingToken, CAKE), CAKE_ROUTER);
-            if (cakeAmt > 0) {
-                pineconeFarm.stakeRewardsTo(address(pineconeFarm), cakeAmt);
+            if (stakingToken == WBNB) {
+                pineconeFarm.stakeRewardsTo(address(pineconeFarm), fee);
+            } else {
+                uint256 bnbAmt = _swap(WBNB, fee, ISmartRouter(smartRouter).tokenPath(stakingToken, WBNB), CAKE_ROUTER);
+                if (bnbAmt > 0) {
+                    pineconeFarm.stakeRewardsTo(address(pineconeFarm), bnbAmt);
+                }
             }
         }
     }
