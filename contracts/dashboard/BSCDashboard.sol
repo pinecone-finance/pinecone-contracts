@@ -41,6 +41,10 @@ contract BSCDashboard is OwnableUpgradeable {
     IMdexCalculator public mdexCalculator;
     IRabbitCalculator public rabbitCalculator;
     IBSWCalculator public bswCalculator;
+    IBabyCalculator public babyCalculator;
+
+    IERC20 private constant BSW = IERC20(0x965F527D9159dCe6288a2219DB51fc6Eef120dD1);
+    IERC20 private constant Baby = IERC20(0x53E562b9B7E5E94b81f10e96Ee70Ad06df3D2657);
 
     function initialize() external initializer {
         __Ownable_init();
@@ -72,6 +76,10 @@ contract BSCDashboard is OwnableUpgradeable {
 
     function setBSWCalculator(address addr) external onlyOwner {
         bswCalculator = IBSWCalculator(addr);
+    }
+
+    function setBabyCalculator(address addr) external onlyOwner {
+        babyCalculator = IBabyCalculator(addr);
     }
 
     function cakePerYearOfPool(uint256 pid) public view returns(uint256) {
@@ -203,6 +211,24 @@ contract BSCDashboard is OwnableUpgradeable {
         totalApy = vaultApy.add(alpacaCompoundingApy);
     }
 
+    function vaultAlpacaApyOfCake(address vault, uint256 pid) public view returns(uint256 totalApy, uint256 vaultApy, uint256 alpacaCompoundingApy) {
+        (uint256 vaultApr, uint256 alpacaApr) = alpacaCalculator.vaultApr(vault, pid);
+        uint256 base_daily_apr = alpacaApr/ 365;
+        uint256 cake_daily_apr = cakePoolDailyApr(0);
+        uint256 cake_apy = compundApy(cake_daily_apr);
+        base_daily_apr = base_daily_apr.mul(UNIT + cake_daily_apr).div(UNIT);
+        alpacaCompoundingApy = base_daily_apr.mul(cake_apy).div(cake_daily_apr);
+        vaultApy = compundApy(vaultApr/365);
+        totalApy = vaultApy.add(alpacaCompoundingApy);
+    }
+
+    function vaultAlpacaApyOfSCIX() public view returns(uint256 totalApy, uint256 lendApy, uint256 stakingApy) {
+        (uint256 lendApr, uint256 stakingApr) = alpacaCalculator.alpacaAprOfSCIX();
+        lendApy = compundApy(lendApr/365);
+        stakingApy = compundApy(stakingApr/365);
+        totalApy = lendApy.add(stakingApy);
+    }
+
     function vaultCakeApy(uint256 cakePid) public view returns(uint256) {
         uint256 dapr = cakePoolDailyApr(cakePid);
         uint256 apy = compundApy(dapr);
@@ -214,6 +240,12 @@ contract BSCDashboard is OwnableUpgradeable {
         uint256 apy = compundApy(dapr);
         return apy;
     } 
+
+    function vaultBabyApy() public view returns(uint256) {
+        uint256 dapr = babyCalculator.babyPoolDailyApr();
+        uint256 apy = compundApy(dapr);
+        return apy;
+    }
 
     function vaultRabbitDAprOfCake(address token, uint256 pid) public view 
         returns(
@@ -249,6 +281,19 @@ contract BSCDashboard is OwnableUpgradeable {
         stakingTokenDApr = vaultApr / 365;
         rewardTokenDApr = alpacaApr/ 365;
         highYeildDApr = bswCalculator.bswPoolDailyApr();
+    }
+
+    function vaultAlpacaDAprOfCake(address vault, uint256 pid) public view
+        returns(
+            uint256 stakingTokenDApr, 
+            uint256 rewardTokenDApr, 
+            uint256 highYeildDApr
+        )
+    {
+        (uint256 vaultApr, uint256 alpacaApr) = alpacaCalculator.vaultApr(vault, pid);
+        stakingTokenDApr = vaultApr / 365;
+        rewardTokenDApr = alpacaApr/ 365;
+        highYeildDApr = cakePoolDailyApr(0);
     }
 
     function apyOfPool(
@@ -314,7 +359,7 @@ contract BSCDashboard is OwnableUpgradeable {
             uint256 farmPid = IPineconeStrategy(strat).farmPid();
             (uint256 _apy,,) = vaultAlpacaApyOfBSW(vault, farmPid);
             uint256 alpaca_apy = _apy.mul(UNIT - fee).div(UNIT);
-            uint256 toPctAmount = pctToTokenAmount(address(CAKE));
+            uint256 toPctAmount = pctToTokenAmount(address(want));
             uint256 pct_apy =  _apy.mul(fee).div(UNIT);
             pct_apy = pct_apy.mul(toPctAmount).div(UNIT);
             earned0Apy = alpaca_apy;
@@ -338,15 +383,41 @@ contract BSCDashboard is OwnableUpgradeable {
                 pct_apy = pct_apy.mul(toPctAmount).div(UNIT);
                 earned0Apy = cake_apy;
                 earned1Apy = pct_apy.add(earnedPctApy);
-            } else if (want == 0x965F527D9159dCe6288a2219DB51fc6Eef120dD1) {
+            } else if (want == address(BSW)) {
                 uint256 _apy = vaultBSWApy();
                 uint256 bsw_apy = _apy.mul(UNIT - fee).div(UNIT);
-                uint256 toPctAmount = pctToTokenAmount(0x965F527D9159dCe6288a2219DB51fc6Eef120dD1);
+                uint256 toPctAmount = pctToTokenAmount(address(BSW));
                 uint256 pct_apy =  _apy.mul(fee).div(UNIT);
                 pct_apy = pct_apy.mul(toPctAmount).div(UNIT);
                 earned0Apy = bsw_apy;
                 earned1Apy = pct_apy.add(earnedPctApy);
+            } else if (want == address(Baby)) {
+                uint256 _apy = vaultBabyApy();
+                uint256 baby_apy = _apy.mul(UNIT - fee).div(UNIT);
+                uint256 toPctAmount = pctToTokenAmount(address(Baby));
+                uint256 pct_apy =  _apy.mul(fee).div(UNIT);
+                pct_apy = pct_apy.mul(toPctAmount).div(UNIT);
+                earned0Apy = baby_apy;
+                earned1Apy = pct_apy.add(earnedPctApy);
             }
+        } else if (_type == StakeType.Alpaca_Cake) {
+            address vault  = IPineconeStrategy(strat).stratAddress();
+            uint256 farmPid = IPineconeStrategy(strat).farmPid();
+            (uint256 _apy,,) = vaultAlpacaApyOfCake(vault, farmPid);
+            uint256 alpaca_apy = _apy.mul(UNIT - fee).div(UNIT);
+            uint256 toPctAmount = pctToTokenAmount(address(CAKE));
+            uint256 pct_apy =  _apy.mul(fee).div(UNIT);
+            pct_apy = pct_apy.mul(toPctAmount).div(UNIT);
+            earned0Apy = alpaca_apy;
+            earned1Apy = pct_apy.add(earnedPctApy);
+        } else if (_type == StakeType.Alpaca_SCIX) {
+            (uint256 _apy,,) = vaultAlpacaApyOfSCIX();
+            uint256 alpaca_apy = _apy.mul(UNIT - fee).div(UNIT);
+            uint256 toPctAmount = pctToTokenAmount(address(want));
+            uint256 pct_apy =  _apy.mul(fee).div(UNIT);
+            pct_apy = pct_apy.mul(toPctAmount).div(UNIT);
+            earned0Apy = alpaca_apy;
+            earned1Apy = pct_apy.add(earnedPctApy);
         }
     }
 
@@ -474,6 +545,11 @@ contract BSCDashboard is OwnableUpgradeable {
             address vault  = IPineconeStrategy(strat).stratAddress();
             uint256 farmPid = IPineconeStrategy(strat).farmPid();
             (stakingTokenDApr, rewardTokenDApr, highYeildDApr) = vaultAlpacaDAprOfBSW(vault, farmPid);
+            pctPremium = pctToTokenAmount(want);
+        } else if (_type == StakeType.Alpaca_Cake) {
+            address vault  = IPineconeStrategy(strat).stratAddress();
+            uint256 farmPid = IPineconeStrategy(strat).farmPid();
+            (stakingTokenDApr, rewardTokenDApr, highYeildDApr) = vaultAlpacaDAprOfCake(vault, farmPid);
             pctPremium = pctToTokenAmount(want);
         }
     }

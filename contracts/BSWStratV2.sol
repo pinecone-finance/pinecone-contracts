@@ -190,18 +190,7 @@ contract BSWStratV2 {
         
         address[] memory path = ISmartRouter(smartRouter).tokenPath(tokenIn, tokenOut);
         if (tokenIn == BSW || tokenOut == BSW) {
-            (, uint256 slippage) = ISmartRouter(smartRouter).getAmountOutAndSlippage(amountIn, path, ROUTER);
-            if (slippage < ISmartRouter(smartRouter).minSlippage()) {
-                return _swap(tokenOut, amountIn, path, ROUTER);
-            } else {
-                if (tokenIn == BSW) {
-                    uint256 bnbAmt = _swap(WBNB, amountIn, ISmartRouter(smartRouter).tokenPath(tokenIn, WBNB), ROUTER);
-                    return _swap(tokenOut, bnbAmt, ISmartRouter(smartRouter).tokenPath(WBNB, tokenOut), CAKE_ROUTER);
-                } else {
-                    uint256 bnbAmt = _swap(WBNB, amountIn, ISmartRouter(smartRouter).tokenPath(tokenIn, WBNB), CAKE_ROUTER);
-                    return _swap(tokenOut, bnbAmt, ISmartRouter(smartRouter).tokenPath(WBNB, tokenOut), ROUTER);
-                }
-            }
+            return _swap(tokenOut, amountIn, path, ROUTER);
         } else {
             return _swap(tokenOut, amountIn, path, CAKE_ROUTER);
         }

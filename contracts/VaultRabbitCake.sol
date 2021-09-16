@@ -251,7 +251,7 @@ contract VaultRabbitCake is VaultBase, CakeStrat{
         user.depositedAt = 0;
         user.pending = 0;
         user.rewardPaid = 0;
-    
+        _farmRabbit();
         return (wantAmt, earnedWantAmt, pctAmt);
     }
 
@@ -266,7 +266,7 @@ contract VaultRabbitCake is VaultBase, CakeStrat{
 
         UserAssetInfo storage user = users[_user];
         require(user.shares > 0, "user.shares is 0");
-        require(user.depositAmt > 0, "depositAmt <= 0");
+        require(user.depositAmt >= _wantAmt, "depositAmt < _wantAmt");
 
         (uint256 wantAmt, uint256 sharesRemoved) = _withdraw(_wantAmt, _user);
         sharesTotal = sharesTotal.sub(sharesRemoved);
@@ -274,7 +274,7 @@ contract VaultRabbitCake is VaultBase, CakeStrat{
         user.pending = user.pending.add(pending);
         user.shares = user.shares.sub(sharesRemoved);
         user.rewardPaid = user.shares.mul(accPerShareOfCake).div(1e12);
-
+        _farmRabbit();
         return (wantAmt, sharesRemoved);
     }
 
@@ -288,6 +288,7 @@ contract VaultRabbitCake is VaultBase, CakeStrat{
         UserAssetInfo storage user = users[_user];
         user.pending = 0;
         user.rewardPaid = user.shares.mul(accPerShareOfCake).div(1e12);
+        _farmRabbit();
         return (rewardAmt, pct);
     }
 
@@ -304,6 +305,14 @@ contract VaultRabbitCake is VaultBase, CakeStrat{
 
     /* ========== private methord ========== */
     function _farm() private 
+    {
+        _farmRabbit();
+        _reawardTokenToCake();
+        _claimCake();
+        _farmCake();
+    }
+
+    function _farmRabbit() private
     {
         if (stakingToken == WBNB) {
             uint256 wantAmt = IERC20(stakingToken).balanceOf(address(this));
@@ -327,10 +336,6 @@ contract VaultRabbitCake is VaultBase, CakeStrat{
         if (ibAmt > 0) {
             FairLaunch.deposit(address(this), fairLaunchPid, ibAmt);
         }
-
-        _reawardTokenToCake();
-        _claimCake();
-        _farmCake();
     }
 
     function _earn() private {

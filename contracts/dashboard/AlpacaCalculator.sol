@@ -51,6 +51,7 @@ contract AlpacaCalculator is OwnableUpgradeable {
     uint256 private constant BLOCK_PER_DAY = 28800;
     address private constant ALPACA = 0x8F0528cE5eF7B51152A59745bEfDD91D97091d2F;
     IPriceCalculator public priceCalculator;
+    ISCIXCalculator public constant scixCalculator = ISCIXCalculator(0x68b5087388023e2dcf55da2a8b5613FdA310E2ce);
     
     function initialize() external initializer {
         __Ownable_init();
@@ -100,6 +101,18 @@ contract AlpacaCalculator is OwnableUpgradeable {
         }
     }
 
+    function alpacaAprOfSCIX() public view returns(uint256 _lendApr, uint256 _stakingApr) {
+        address vault = 0xf1bE8ecC990cBcb90e166b71E368299f0116d421;
+        uint256 utilization = vaultUtilization(vault);
+        uint256 interest = vaultInterest(vault);
+        IVaultConfig config = IVault(vault).config();
+        uint256 fee = config.getReservePoolBps();
+        _lendApr = interest.mul(SEC_PER_YEAR).mul(utilization).div(UNIT);
+        _lendApr = _lendApr.mul(10000 - fee).div(10000);
+
+        _stakingApr = scixCalculator.poolDailyApr().mul(365);
+    }
+
     function priceOfAlpaca() public view returns(uint256) {
         return priceCalculator.priceOfToken(ALPACA);
     }
@@ -145,7 +158,7 @@ contract AlpacaCalculator is OwnableUpgradeable {
         uint256 total = IVault(vault).totalToken();
         total = total.sub(amount);
         uint256 supply = IERC20(address(vault)).totalSupply();
-        if (supply == 0) {
+        if (total == 0) {
             return amount;
         }
 

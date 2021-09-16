@@ -126,6 +126,19 @@ contract VaultRewardsBNB is VaultBase {
         return _shares;
     }
 
+    function migrate(uint256 _amount, uint256 _sharesTotal)
+        public 
+        onlyOwner
+        whenNotPaused
+    {
+        IERC20(WBNB).safeTransferFrom(
+            address(msg.sender),
+            address(this),
+            _amount
+        );
+        sharesTotal = _sharesTotal;
+    }
+
     function earn() public whenNotPaused onlyGov
     {
         _earn();

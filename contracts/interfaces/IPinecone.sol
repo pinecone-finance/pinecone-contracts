@@ -14,7 +14,9 @@ enum StakeType {
     Alpaca_BSW,
     HotToken,
     PCT,
-    RewardsPCT
+    RewardsPCT,
+    Alpaca_Cake,
+    Alpaca_SCIX
 }
 
 interface IPineconeFarm {
@@ -80,6 +82,7 @@ interface IPineconeStrategy {
     function setWithdrawFeeFactor(uint256 _withdrawFeeFactor) external;
     function pendingRewardsValue() external view returns(uint256 priceInUsd);
     function pendingRewards(address _user) external view returns(uint256 wantAmt, uint256 pctAmt);
+    function migrate(uint256 _amount, uint256 _sharesTotal) external;
 }
 
 interface IOwner {

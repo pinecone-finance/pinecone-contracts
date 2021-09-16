@@ -44,6 +44,10 @@ struct CakeRewardToken {
     uint256 accPerShare;
 }
 
+interface IPCTStrategy {
+    function depositFromClaim(uint256 _wantAmt, address _user) external returns(uint256);
+}
+
 contract PineconeFarm is OwnableUpgradeable, ReentrancyGuardUpgradeable, IPineconeTokenCallee {
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
@@ -691,14 +695,15 @@ contract PineconeFarm is OwnableUpgradeable, ReentrancyGuardUpgradeable, IPineco
             address(this),
             _amount
         );
-
-        pool.want.safeIncreaseAllowance(pool.strat, _amount);
+        _safeApprove(address(pool.want), pool.strat);
         IPineconeStrategy(pool.strat).deposit(_amount, _to);
         if (cakeRewardsStakingNewPid > 0) {
             _upateCakeRewards2(_amount);
         } else {
             _upateCakeRewards(_amount);
         }
+
+        emit Deposit(msg.sender, _pid, _amount);
     }
 
     function pctDailyReward() public view returns(uint256) {
@@ -851,15 +856,15 @@ contract PineconeFarm is OwnableUpgradeable, ReentrancyGuardUpgradeable, IPineco
     function migrateCakeRewardsPool(uint256 fromId, uint toId, bool newPool) public onlyDev {
         PoolInfo storage fromPool = poolInfo[fromId];
         PoolInfo storage toPool = poolInfo[toId];
-        (uint256 wantAmt,,) = IPineconeStrategy(fromPool.strat).withdrawAll(address(this));
+        (uint256 wantAmt, uint256 sharesTotal,) = IPineconeStrategy(fromPool.strat).withdrawAll(address(this));
         _safeApprove(address(toPool.want), toPool.strat);
-        IPineconeStrategy(toPool.strat).deposit(wantAmt, address(this));
+        IPineconeStrategy(toPool.strat).migrate(wantAmt, sharesTotal);
         if (newPool) {
             cakeRewardsStakingNewPid = toId;
         } else {
             cakeRewardsStakingPid = toId;
         }
-        
+        emit Deposit(msg.sender, toId, wantAmt);
     }
 
     function _safeApprove(address token, address spender) internal {

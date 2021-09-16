@@ -5,9 +5,12 @@ import "./helpers/Ownable.sol";
 import "./interfaces/IPinecone.sol";
 import "./interfaces/IDashboard.sol";
 import "./interfaces/IPancakeRouter02.sol";
+import "./libraries/SafeMath.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 
 contract PineconeConfig is OwnableUpgradeable {
+    using SafeMath for uint256;
+    
     address public PCT;
     IAlpacaCalculator public alpacaCalculator;
     IPriceCalculator public priceCalculator;
@@ -90,20 +93,36 @@ contract PineconeConfig is OwnableUpgradeable {
         }
     }
 
-    function getAmountsOut(uint256 amount, address token0, address token1, address router) public view returns (uint256) {
-        if (amount == 0) {
+    function getAmountsOut(uint256 amountIn, address tokenIn, address tokenOut, address router) public view returns (uint256) {
+        if (amountIn == 0) {
             return 0;
         }
-        if (token0 == token1) {
-            return amount;
+        if (tokenIn == tokenOut) {
+            return amountIn;
         }
 
-        uint256[] memory amounts = IPancakeRouter02(router).getAmountsOut(amount, _tokenPath(token0, token1));
+        uint256[] memory amounts = IPancakeRouter02(router).getAmountsOut(amountIn, _tokenPath(tokenIn, tokenOut));
         if (amounts.length == 0) {
             return 0;
         }
         return amounts[amounts.length - 1];
     }
+
+    function getAmountsOut(uint256 amountIn, address tokenIn, address tokenOut) public view returns (uint256) {
+        if (amountIn == 0) {
+            return 0;
+        }
+
+        if (tokenIn == tokenOut) {
+            return amountIn;
+        }
+
+        uint256 priceOfTokenIn = priceCalculator.priceOfToken(tokenIn);
+        uint256 priceOfTokenOut = priceCalculator.priceOfToken(tokenOut);
+
+        return amountIn.mul(priceOfTokenIn).div(priceOfTokenOut);
+    }
+
 
     function _tokenPath(address _token0, address _token1) private pure returns(address[] memory path) {
         require(_token0 != _token1, "_token0 == _token1");

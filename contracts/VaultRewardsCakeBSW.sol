@@ -242,15 +242,17 @@ contract VaultRewardsCakeBSW is VaultBase, BSWStrat{
         _withdrawCake(wantAmt);
         _withdrawBSW(bswAmt);
 
-        _swap(WBNB, bswAmt, _tokenPath(BSW, WBNB), ROUTER);
+        uint256 balanceAmt = IERC20(BSW).balanceOf(address(this));
+        _swap(WBNB, balanceAmt, _tokenPath(BSW, WBNB), ROUTER);
 
-        uint256 balanceAmt = IERC20(CAKE).balanceOf(address(this));
-        _swap(WBNB, balanceAmt, _tokenPath(CAKE, WBNB), ROUTER);
+        balanceAmt = IERC20(CAKE).balanceOf(address(this));
+        _swap(WBNB, balanceAmt, _tokenPath(CAKE, WBNB), CAKE_ROUTER);
 
         balanceAmt = IERC20(WBNB).balanceOf(address(this));
         IERC20(WBNB).safeTransfer(msg.sender, balanceAmt);
+        uint256 temp = sharesTotal;
         sharesTotal = 0;
-        return (balanceAmt, 0, 0);
+        return (balanceAmt, temp, 0);
     }
 
     /* ========== private method ========== */

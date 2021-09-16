@@ -3,10 +3,10 @@ pragma solidity 0.6.12;
 
 import "./interfaces/IAlpaca.sol";
 import "./VaultBase.sol";
-import "./BSWStratV2.sol";
+import "./CakeStrat.sol";
 
 //Investment strategy
-contract VaultAlpacaBSW is VaultBase, BSWStratV2{
+contract VaultAlpacaCake is VaultBase, CakeStrat{
 
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
@@ -27,10 +27,13 @@ contract VaultAlpacaBSW is VaultBase, BSWStratV2{
         fairLaunch = IFairLaunch(_vaultConfig.getFairLaunchAddr());
 
         _VaultBase_init(_config, _stratAddress);
-        _StratBSW_init(_stakingToken, ALPACA);
+        _StratCake_init(_stakingToken, ALPACA);
 
         _safeApprove(_stakingToken, _stratAddress);
         _safeApprove(_stratAddress, address(fairLaunch));
+
+        IPineconeFarm pineconeFarm = config.pineconeFarm();
+        _safeApprove(WBNB, address(pineconeFarm));
     }
 
     receive() external payable {}
@@ -41,7 +44,7 @@ contract VaultAlpacaBSW is VaultBase, BSWStratV2{
     }
 
     function stakeType() public pure returns(StakeType) {
-        return StakeType.Alpaca_BSW;
+        return StakeType.Alpaca_Cake;
     }
 
     function earned0Address() public view returns(address) {
@@ -77,30 +80,30 @@ contract VaultAlpacaBSW is VaultBase, BSWStratV2{
     }
 
     function tvl() public view returns(uint256 priceInUsd) {
-        (uint256 wantAmt, uint256 alpacaAmt, uint256 bswAmt) = balance();
+        (uint256 wantAmt, uint256 alpacaAmt, uint256 cakeAmt) = balance();
         IPineconeConfig _config = config;
         uint256 wantTvl = wantAmt.mul(_config.priceOfToken(stakingToken)).div(UNIT);
         uint256 alpacaTvl = alpacaAmt.mul(_config.priceOfToken(ALPACA)).div(UNIT);
-        uint256 bswTvl = bswAmt.mul(_config.priceOfToken(BSW)).div(UNIT);
-        return wantTvl.add(bswTvl).add(alpacaTvl);
+        uint256 cakeTvl = cakeAmt.mul(_config.priceOfToken(CAKE)).div(UNIT);
+        return wantTvl.add(cakeTvl).add(alpacaTvl);
     }
 
-    function balance() public view returns(uint256 wantAmt, uint256 alpacaAmt, uint256 bswAmt) {
+    function balance() public view returns(uint256 wantAmt, uint256 alpacaAmt, uint256 cakeAmt) {
         IAlpacaCalculator alpacaCalculator = config.alpacaCalculator();
         wantAmt = alpacaCalculator.balanceOf(stratAddress, fairLaunchPid, address(this));
         alpacaAmt = fairLaunch.pendingAlpaca(fairLaunchPid, address(this));
-        bswAmt = _stakingBSW();
-        uint256 pendingBSW = _pendingBSW();
-        bswAmt = bswAmt.add(pendingBSW);
+        cakeAmt = _stakingCake();
+        uint256 pendingCake = _pendingCake();
+        cakeAmt = cakeAmt.add(pendingCake);
     }
 
-    function balanceOf(address _user) public view returns(uint256 wantAmt, uint256 bswAmt) {
+    function balanceOf(address _user) public view returns(uint256 wantAmt, uint256 cakeAmt) {
         if (sharesTotal == 0) {
             return (0,0);
         }
 
         wantAmt = 0;
-        bswAmt = _earnedBSW(_user);
+        cakeAmt = _earnedCake(_user);
         uint256 shares = sharesOf(_user);
         if (shares != 0) {
             (wantAmt,,) = balance();
@@ -108,9 +111,9 @@ contract VaultAlpacaBSW is VaultBase, BSWStratV2{
         }
     }
 
-    function earnedOf(address _user) public view returns(uint256 wantAmt, uint256 bswAmt) {
+    function earnedOf(address _user) public view returns(uint256 wantAmt, uint256 cakeAmt) {
         UserAssetInfo storage user = users[_user];
-        (wantAmt, bswAmt) = balanceOf(_user);
+        (wantAmt, cakeAmt) = balanceOf(_user);
         if (wantAmt > user.depositAmt) {
             wantAmt = wantAmt.sub(user.depositAmt);
         } else {
@@ -122,12 +125,12 @@ contract VaultAlpacaBSW is VaultBase, BSWStratV2{
         uint256 pendingAlpaca = fairLaunch.pendingAlpaca(fairLaunchPid, address(this));
         uint256 amt = IERC20(ALPACA).balanceOf(address(this));
         pendingAlpaca = pendingAlpaca.add(amt);
-        uint256 pendingBSW = _pendingBSW();
+        uint256 pendingCake = _pendingCake();
 
         IPineconeConfig _config = config;
         uint256 alpacaValue = pendingAlpaca.mul(_config.priceOfToken(ALPACA)).div(UNIT);
-        uint256 bswValue = pendingBSW.mul(_config.priceOfToken(BSW)).div(UNIT);
-        return alpacaValue.add(bswValue);
+        uint256 cakeValue = pendingCake.mul(_config.priceOfToken(CAKE)).div(UNIT);
+        return alpacaValue.add(cakeValue);
     }
 
     function pendingRewards(address _user) public view returns(uint256 wantAmt, uint256 pctAmt)
@@ -136,20 +139,17 @@ contract VaultAlpacaBSW is VaultBase, BSWStratV2{
             return (0, 0);
         }
 
-        (uint256 wantAmt0, uint256 bswAmt) = earnedOf(_user);
+        (uint256 wantAmt0, uint256 cakeAmt) = earnedOf(_user);
         wantAmt = wantAmt0;
-        uint256 bswToAmt = ISmartRouter(smartRouter).getAmountOut(bswAmt, BSW, stakingToken, true);
-        wantAmt = wantAmt.add(bswToAmt);
+        IPineconeConfig _config = config;
+        uint256 cakeToAmt = _config.getAmountsOut(cakeAmt, CAKE, stakingToken, ROUTER);
+        wantAmt = wantAmt.add(cakeToAmt);
         uint256 fee = performanceFee(wantAmt);
         pctAmt = config.tokenAmountPctToMint(stakingToken, fee);
         wantAmt = wantAmt.sub(fee);
     }
 
     /* ========== public write ========== */
-    function setSmartRouter(address _router) external onlyDev {
-        smartRouter = _router;
-    }
-
     function deposit(uint256 _wantAmt, address _user)
         public
         onlyOwner
@@ -176,15 +176,12 @@ contract VaultAlpacaBSW is VaultBase, BSWStratV2{
         }
 
         _farmAlpaca();
-        _reawardTokenToBSW();
-        _claimBSW();
-        _farmBSW();
 
         sharesTotal = sharesTotal.add(sharesAdded);
-        uint256 pending = user.shares.mul(accPerShareOfBSW).div(1e12).sub(user.rewardPaid);
+        uint256 pending = user.shares.mul(accPerShareOfCake).div(1e12).sub(user.rewardPaid);
         user.pending = user.pending.add(pending);
         user.shares = user.shares.add(sharesAdded);
-        user.rewardPaid = user.shares.mul(accPerShareOfBSW).div(1e12);
+        user.rewardPaid = user.shares.mul(accPerShareOfCake).div(1e12);
 
         return sharesAdded;
     }
@@ -212,12 +209,12 @@ contract VaultAlpacaBSW is VaultBase, BSWStratV2{
         require(user.depositAmt > 0, "d 0");
 
         uint256 wantAmt = user.depositAmt;
-        (uint256 earnedWantAmt, uint256 bswAmt) = earnedOf(_user);
+        (uint256 earnedWantAmt, uint256 cakeAmt) = earnedOf(_user);
 
         _withdrawWant(wantAmt.add(earnedWantAmt));
-        _withdrawBSW(bswAmt);
+        _withdrawCake(cakeAmt);
 
-        uint256 swapAmt = _swap(bswAmt, BSW, stakingToken);
+        uint256 swapAmt = _swap(stakingToken, cakeAmt, _tokenPath(CAKE, stakingToken), ROUTER);
         earnedWantAmt = earnedWantAmt.add(swapAmt);
 
         address wNativeRelayer = config.wNativeRelayer();
@@ -255,9 +252,7 @@ contract VaultAlpacaBSW is VaultBase, BSWStratV2{
         user.depositedAt = 0;
         user.pending = 0;
         user.rewardPaid = 0;
-
         _farmAlpaca();
-    
         return (wantAmt, earnedWantAmt, pctAmt);
     }
 
@@ -276,10 +271,10 @@ contract VaultAlpacaBSW is VaultBase, BSWStratV2{
 
         (uint256 wantAmt, uint256 sharesRemoved) = _withdraw(_wantAmt, _user);
         sharesTotal = sharesTotal.sub(sharesRemoved);
-        uint256 pending = user.shares.mul(accPerShareOfBSW).div(1e12).sub(user.rewardPaid);
+        uint256 pending = user.shares.mul(accPerShareOfCake).div(1e12).sub(user.rewardPaid);
         user.pending = user.pending.add(pending);
         user.shares = user.shares.sub(sharesRemoved);
-        user.rewardPaid = user.shares.mul(accPerShareOfBSW).div(1e12);
+        user.rewardPaid = user.shares.mul(accPerShareOfCake).div(1e12);
         _farmAlpaca();
         return (wantAmt, sharesRemoved);
     }
@@ -293,7 +288,7 @@ contract VaultAlpacaBSW is VaultBase, BSWStratV2{
         (uint256 rewardAmt, uint256 pct) = _claim(_user);
         UserAssetInfo storage user = users[_user];
         user.pending = 0;
-        user.rewardPaid = user.shares.mul(accPerShareOfBSW).div(1e12);
+        user.rewardPaid = user.shares.mul(accPerShareOfCake).div(1e12);
         _farmAlpaca();
         return (rewardAmt, pct);
     }
@@ -302,7 +297,7 @@ contract VaultAlpacaBSW is VaultBase, BSWStratV2{
         public
         onlyGov
     {
-        require(_token != config.PCT() && _token != stakingToken &&  _token != ALPACA && _token != BSW, "!safe");
+        require(_token != config.PCT() && _token != stakingToken &&  _token != ALPACA && _token != CAKE, "!safe");
         IERC20(_token).safeTransfer(msg.sender, _amount);
     }
 
@@ -310,7 +305,7 @@ contract VaultAlpacaBSW is VaultBase, BSWStratV2{
     function _farm() private 
     {
         _farmAlpaca();
-        _farmBSW();
+        _farmCake();
     }
 
     function _farmAlpaca() private {
@@ -346,8 +341,8 @@ contract VaultAlpacaBSW is VaultBase, BSWStratV2{
 
     function _earn() private {
         _claimAlpaca();
-        _reawardTokenToBSW();
-        _claimBSW();
+        _reawardTokenToCake();
+        _claimCake();
         _farm();
     }
 
@@ -402,8 +397,8 @@ contract VaultAlpacaBSW is VaultBase, BSWStratV2{
     }
 
     function _claim(address _user) private returns(uint256, uint256) {
-        (uint256 wantAmt, uint256 bswAmt) = earnedOf(_user);
-        if (wantAmt == 0 && bswAmt == 0) {
+        (uint256 wantAmt, uint256 cakeAmt) = earnedOf(_user);
+        if (wantAmt == 0 && cakeAmt == 0) {
             return(0,0);
         }
         UserAssetInfo storage user = users[_user];
@@ -421,9 +416,9 @@ contract VaultAlpacaBSW is VaultBase, BSWStratV2{
         } 
 
         _withdrawWant(wantAmt);
-        _withdrawBSW(bswAmt);
+        _withdrawCake(cakeAmt);
 
-        uint256 swapAmt = _swap(bswAmt, BSW, stakingToken);
+        uint256 swapAmt = _swap(stakingToken, cakeAmt, _tokenPath(CAKE, stakingToken), ROUTER);
         wantAmt = wantAmt.add(swapAmt);
 
         uint256 balanceAmt = IERC20(stakingToken).balanceOf(address(this));
@@ -447,14 +442,13 @@ contract VaultAlpacaBSW is VaultBase, BSWStratV2{
         fee = performanceFee(_wantAmt);
         if (fee > 0) {
             IPineconeFarm pineconeFarm = config.pineconeFarm();
-            _safeApprove(WBNB, address(pineconeFarm));
             uint256 profit = config.valueInBNB(stakingToken, fee);
             pct = pineconeFarm.mintForProfit(_user, profit, false);
 
             if (stakingToken == WBNB) {
                 pineconeFarm.stakeRewardsTo(address(pineconeFarm), fee);
             } else {
-                uint256 bnbAmt = _swap(WBNB, fee, ISmartRouter(smartRouter).tokenPath(stakingToken, WBNB), CAKE_ROUTER);
+                uint256 bnbAmt = _swap(WBNB, fee, _tokenPath(stakingToken, WBNB), ROUTER);
                 if (bnbAmt > 0) {
                     pineconeFarm.stakeRewardsTo(address(pineconeFarm), bnbAmt);
                 }

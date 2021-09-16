@@ -22,10 +22,8 @@ contract VaultHot is VaultBase {
     uint256 public sharesTotal;
     mapping (address=>UserAssetInfo) users;
 
-    address public constant CAKE = 0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82;
     address public constant BSW = 0x965F527D9159dCe6288a2219DB51fc6Eef120dD1;
     address public constant WBNB = 0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c;
-    address public constant CAKE_ROUTER = 0x10ED43C718714eb63d5aA57B78B54704E256024E;
 
     uint256 internal constant dust = 1000;
     uint256 internal constant UNIT = 1e18;
@@ -56,11 +54,8 @@ contract VaultHot is VaultBase {
         _safeApprove(_stakingToken, _swapRouter);
         _safeApprove(WBNB, _swapRouter);
 
-        _safeApprove(CAKE, CAKE_ROUTER);
-        _safeApprove(WBNB, CAKE_ROUTER);
-
         IPineconeFarm pineconeFarm = config.pineconeFarm();
-        _safeApprove(CAKE, address(pineconeFarm));
+        _safeApprove(WBNB, address(pineconeFarm));
     }
 
     /* ========== public view ========== */
@@ -279,7 +274,7 @@ contract VaultHot is VaultBase {
         user.shares = 0;
         user.depositAmt = 0;
         user.depositedAt = 0;
-
+        _earn();
         return (wantAmt, earnedWantAmt, pctAmt);
     }
 
@@ -294,11 +289,12 @@ contract VaultHot is VaultBase {
 
         UserAssetInfo storage user = users[_user];
         require(user.shares > 0, "user.shares is 0");
-        require(user.depositAmt > 0, "depositAmt <= 0");
+        require(user.depositAmt >= _wantAmt, "depositAmt < _wantAmt");
 
         (uint256 wantAmt, uint256 sharesRemoved) = _withdraw(_wantAmt, _user);
         sharesTotal = sharesTotal.sub(sharesRemoved);
         user.shares = user.shares.sub(sharesRemoved);
+        _earn();
         return (wantAmt, sharesRemoved);
     }
 
@@ -309,6 +305,7 @@ contract VaultHot is VaultBase {
         returns(uint256, uint256)
     {
         (uint256 rewardAmt, uint256 pct) = _claim(_user);
+        _earn();
         return (rewardAmt, pct);
     }
 
@@ -399,7 +396,6 @@ contract VaultHot is VaultBase {
         fee = performanceFee(_wantAmt);
         if (fee > 0) {
             IPineconeFarm pineconeFarm = config.pineconeFarm();
-            _safeApprove(WBNB, address(pineconeFarm));
             uint256 profit = config.valueInBNB(stakingToken, fee);
             pct = pineconeFarm.mintForProfit(_user, profit, false);
 
@@ -423,22 +419,7 @@ contract VaultHot is VaultBase {
 
     function _swap(uint256 amountIn, address tokenIn, address tokenOut) internal returns(uint256) {
         address[] memory path = ISmartRouter(smartRouter).tokenPath(tokenIn, tokenOut);
-        if (swapRouter == CAKE_ROUTER) {
-            return _swap(tokenOut, amountIn, path, CAKE_ROUTER);
-        } else {
-            (, uint256 slippage) = ISmartRouter(smartRouter).getAmountOutAndSlippage(amountIn, path, swapRouter);
-            if (slippage < ISmartRouter(smartRouter).minSlippage()) {
-                return _swap(tokenOut, amountIn, path, swapRouter);
-            } else {
-                if (tokenIn == CAKE) {
-                    uint256 bnbAmt = _swap(WBNB, amountIn, ISmartRouter(smartRouter).tokenPath(tokenIn, WBNB), CAKE_ROUTER);
-                    return _swap(tokenOut, bnbAmt, ISmartRouter(smartRouter).tokenPath(WBNB, tokenOut), swapRouter);
-                } else {
-                    uint256 bnbAmt = _swap(WBNB, amountIn, ISmartRouter(smartRouter).tokenPath(tokenIn, WBNB), swapRouter);
-                    return _swap(tokenOut, bnbAmt, ISmartRouter(smartRouter).tokenPath(WBNB, tokenOut), CAKE_ROUTER);
-                }
-            }   
-        }
+        return _swap(tokenOut, amountIn, path, swapRouter);
     }
 
     function _swap(address token, uint256 amount, address[] memory path, address router) internal returns(uint256) {
