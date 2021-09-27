@@ -16,6 +16,8 @@ contract VaultPCTPair is VaultBase, Strat{
         address _config ) 
         external initializer
     {
+        require(_config != address(0), "zero address");
+        require(_stakingToken != address(0), "zero address");
         _VaultBase_init(_config, address(0));
         _Strat_init(_stakingToken, address(0));
     }

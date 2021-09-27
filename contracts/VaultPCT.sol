@@ -27,6 +27,7 @@ contract VaultPCT is VaultBase, Strat{
         address _config ) 
         external initializer
     {
+        require(_config != address(0), "zero address");
         _VaultBase_init(_config, address(0));
         _Strat_init(config.PCT(), address(0));
         calcDuration = 5 days;
