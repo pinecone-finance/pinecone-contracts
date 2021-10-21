@@ -43,10 +43,7 @@ contract PIToken is TokenBase, ERC20PausableUpgradeable, ReentrancyGuardUpgradea
     }
     InterestRate public interestRate;
 
-    //for test
-    //uint256 public constant SEC_OF_DAY = 1 days;
-    uint256 public constant SEC_OF_DAY = 5 minutes;
-    //--
+    uint256 public constant SEC_OF_DAY = 1 days;
     uint256 constant expScale = 1e18;
 
     IPriceCalculator public constant priceCalculator = IPriceCalculator(0xeCFAd58c39d0108Dc93a07FdBa79A0d0F1286D87);
@@ -150,10 +147,7 @@ contract PIToken is TokenBase, ERC20PausableUpgradeable, ReentrancyGuardUpgradea
         maxTotalDepositAmt_ = maxTotalDepositAmt;
         leftDepoistAmt_ = leftDepoistAmt();
         totalDepositAmt_ = totalDepositAmt;
-        //for test
-        //tvl_ = totalDepositAmt_.mul(priceCalculator.priceOfToken(underlying)).div(expScale);
-        tvl_ = totalDepositAmt_;
-        //--
+        tvl_ = totalDepositAmt_.mul(priceCalculator.priceOfToken(underlying)).div(expScale);
     }
 
     function setDepositLimit(uint256 _minDepositAmt, uint256 _maxTotalDepositAmt) external onlyOwner {

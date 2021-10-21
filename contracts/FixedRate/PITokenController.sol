@@ -31,10 +31,8 @@ contract PITokenController is TokenAuth {
     uint256 public feeOf30Days;
     uint256 public constant FEE_MAX = 1000;
     uint256 public constant FEE_UL = 50; //max fee 5%
-    //for test
-    uint256 public constant SEC_OF_15DAYS = 15 minutes; 
-    uint256 public constant SEC_OF_30DAYS = 30 minutes;
-    //--
+    uint256 public constant SEC_OF_15DAYS = 15 days; 
+    uint256 public constant SEC_OF_30DAYS = 30 days;
 
     mapping (address=>bool) public isExcludedFromFee;
 
@@ -256,7 +254,7 @@ contract PITokenController is TokenAuth {
         emit WithdrawAllCake(vaultCake, binanceWallet, cap);
     }
 
-    // 交易提走cake收益到币安交易所
+    // 交易员提走cake收益到币安交易所
     function claimCake() public onlyAuthSenders {
         uint256 beforeAmt = balanceOfToken(CAKE);
         IVaultCake(vaultCake).claim(address(this));
@@ -267,7 +265,7 @@ contract PITokenController is TokenAuth {
         emit ClaimCake(vaultCake, binanceWallet, cap);
     }
 
-    // 交易员将USDT充入到用户可以提现的智能合约
+    // 交易员将USDT充入提现智能合约
     function repay(address _piToken, uint256 _amount) public onlyAuthSenders {
         PITokenInfo storage piToken = piTokens[_piToken];
         require(piToken.enable == true, "PITokenController: not PIToken");
@@ -327,17 +325,16 @@ contract PITokenController is TokenAuth {
         redeemAmt = piToken.redeemAmt;
         redeemedAt = piToken.redeemedAt;
 
-        // for test
         address underlying = IPIToken(_piToken).underlying();
         walletBalanceOfUSD = IERC20(underlying).balanceOf(repayEscrow);
-        /*walletBalanceOfCake = IERC20(CAKE).balanceOf(cakeEscrow);
+        walletBalanceOfCake = IERC20(CAKE).balanceOf(cakeEscrow);
 
         (uint256 depositedAt, uint256 depositAmt, uint256 balanceValue, uint256 earnedAmt,) = IVaultCake(vaultCake).userInfoOf(address(this));
         cakeDepositAmt = depositAmt;
         cakeDepositedAt = depositedAt;
         cakeEarnedAmt = earnedAmt;
         cakeBalanceInUSD = balanceValue;
-        cakePriceInUSD = priceCalculator.priceOfCake();*/
+        cakePriceInUSD = priceCalculator.priceOfCake();
     }
 
     // 返回费率信息
