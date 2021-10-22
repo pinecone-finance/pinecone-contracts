@@ -59,4 +59,7 @@ contract TokenBase is OwnableUpgradeable {
         if (_amount == 0) return;
         IERC20(_token).safeTransfer(_to, _amount);
     }
+
+    uint256[48] private __gap;
+
 }

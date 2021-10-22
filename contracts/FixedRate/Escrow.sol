@@ -10,6 +10,9 @@ contract Escrow is TokenBase {
     using SafeMath for uint256;
     address public auth;
 
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() initializer {}
+
     function initialize(address _auth) external initializer {
         __TokenBase_init();
         auth = _auth;
