@@ -39,6 +39,9 @@ contract VaultCake is OwnableUpgradeable, ReentrancyGuardUpgradeable, PausableUp
     address public devAddress;
     address public govAddress;
 
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() initializer {}
+
     function initialize (
     ) external initializer {
         __Ownable_init();

@@ -53,6 +53,9 @@ contract PIToken is TokenBase, ERC20PausableUpgradeable, ReentrancyGuardUpgradea
     event Redeem(address indexed sender, uint256 piAmount, uint256 underlyingAmount, uint256 referralUnderlyingAmount, uint256 feePiAmount);
     event Withdraw(address indexed sender, uint256 underlyingAmount);
 
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() initializer {}
+
     function initialize (
         string memory _name,
         string memory _symbol,

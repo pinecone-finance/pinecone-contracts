@@ -65,6 +65,9 @@ contract PITokenController is TokenAuth {
     event ClaimCake(address indexed from, address indexed to, uint256 amount);
     event Repay(address indexed underlyingToken, address indexed from, address indexed to, uint256 amount);
 
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() initializer {}
+
     function initialize(
     ) external initializer {
         __TokenAuth_init();
